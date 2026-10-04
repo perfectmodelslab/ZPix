@@ -134,7 +134,7 @@ if __name__ == "__main__":
         image_pipe = ImagePipeline()
         """Current image pipeline."""
 
-        initial_model = image_pipe.load(models[0])
+        initial_model = image_pipe.load(models[2])  # FLUX.2 [klein] 4B HQ
 
         model = gr.State(value=initial_model)
         """Loaded image model."""
