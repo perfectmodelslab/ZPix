@@ -9,6 +9,7 @@ from shutil import rmtree
 
 import gradio as gr
 import torch
+from gradio_maskboundingbox import MaskBoundingBox
 
 # Force tensorwise FP8 matmul kernels as a fallback on hardware that lacks
 # native row-wise FP8 support, such as consumer NVIDIA Blackwell cards.
@@ -44,6 +45,7 @@ from source.py.ref_images import (
     show_ref_image_strength,
     update_ref_images,
 )
+from source.py.regional_edits import sync_ui_to_inpainting_mode
 from source.py.resolutions import get_aspects_and_resolutions
 from source.py.server_close import close_server
 from source.py.translations import get_translate_func
@@ -251,7 +253,7 @@ if __name__ == "__main__":
                         visible="hidden",
                         js_on_load=f"""
                             let select = document.getElementById("model-select")
-                            select.title = "{t("To edit photos, select [klein] 4B")}"
+                            select.title = "{t("For more contextual edits, select [klein]")}"
                         """,
                     )
                     model_status = gr.HTML(
@@ -287,39 +289,43 @@ if __name__ == "__main__":
                         show_progress="hidden",
                     )
 
-                with gr.Row(
-                    # A row hidden on startup is not mounted by Gradio,
-                    # that's why we use the "hidden" class instead of the `visible` property.
-                    elem_classes=(
-                        [] if "image-to-image" in initial_model.features else ["hidden"]
-                    )
-                ) as reference_images_row:
-                    reference_images = gr.MultimodalTextbox(
-                        label=get_ref_images_label(image_pipe, t),
-                        sources=["upload"],
-                        file_count=get_ref_images_file_count(image_pipe),
-                        file_types=["image"],
-                        max_plain_text_length=0,
-                        submit_btn=False,
-                        elem_id="reference-images",
-                    )
-                    gr.HTML(
-                        visible="hidden",
-                        elem_classes="hidden",
-                        js_on_load=f"""
-                            let zone = document.getElementById("reference-images")
-                            zone.title = "{t("Drag an image here to add it as a reference")}"
-                        """,
-                    )
+                # Hidden in place of inpainting strength when a mask bbox is drawn.
+                with gr.Column(elem_id="ref-images-column") as ref_images_column:
+                    with gr.Row(
+                        # A row hidden on startup is not mounted by Gradio,
+                        # that's why we use the "hidden" class instead of the `visible` property.
+                        elem_classes=(
+                            []
+                            if "image-to-image" in initial_model.features
+                            else ["hidden"]
+                        )
+                    ) as reference_images_row:
+                        reference_images = gr.MultimodalTextbox(
+                            label=get_ref_images_label(image_pipe, t),
+                            sources=["upload"],
+                            file_count=get_ref_images_file_count(image_pipe),
+                            file_types=["image"],
+                            max_plain_text_length=0,
+                            submit_btn=False,
+                            elem_id="reference-images",
+                        )
+                        gr.HTML(
+                            visible="hidden",
+                            elem_classes="hidden",
+                            js_on_load=f"""
+                                let zone = document.getElementById("reference-images")
+                                zone.title = "{t("Drag an image here to add it as a reference")}"
+                            """,
+                        )
 
-                with gr.Row() as ref_image_strength_row:
-                    ref_image_strength = gr.Slider(
-                        label=t("Reference Strength"),
-                        minimum=0.1,
-                        maximum=0.9,
-                        step=0.1,
-                        value=0.5,
-                    )
+                    with gr.Row() as ref_image_strength_row:
+                        ref_image_strength = gr.Slider(
+                            label=t("Reference Strength"),
+                            minimum=0.1,
+                            maximum=0.9,
+                            step=0.1,
+                            value=0.5,
+                        )
 
                 # On reference images change: show the reference strength row if
                 # the loaded model uses it, and update the reference images block.
@@ -332,6 +338,17 @@ if __name__ == "__main__":
                     outputs=[ref_image_strength_row, reference_images],
                     show_progress="hidden",
                 )
+
+                # Shown in place of reference images when a mask bbox is drawn.
+                with gr.Row(elem_classes=["hidden"]) as inpaint_strength_row:
+                    inpaint_strength = gr.Slider(
+                        label=t("Inpainting Strength"),
+                        # Below, few-step models have no step left to denoise.
+                        minimum=0.3,
+                        maximum=1.0,
+                        step=0.1,
+                        value=initial_model.default.inpaint_strength,
+                    )
 
                 with gr.Row():
                     aspect_ratio = gr.Dropdown(
@@ -656,6 +673,7 @@ if __name__ == "__main__":
                         show_ref_image_strength(image_pipe, ref_images),
                         gr.update(value=image_model.default.steps),
                         gr.update(value=image_model.default.cfg),
+                        gr.update(value=image_model.default.inpaint_strength),
                     ),
                     inputs=[model, reference_images],
                     outputs=[
@@ -664,6 +682,7 @@ if __name__ == "__main__":
                         ref_image_strength_row,
                         steps,
                         cfg,
+                        inpaint_strength,
                     ],
                     show_progress="hidden",
                 ).then(
@@ -715,6 +734,54 @@ if __name__ == "__main__":
                     interactive=False,
                     elem_id="gallery",
                 )
+                mask_bbox = MaskBoundingBox(
+                    gallery=gallery_images,
+                    draw_tooltip=t("Draw a box to enable inpainting"),
+                    clear_tooltip=t("Click to exit inpainting mode"),
+                    interactive=initial_model.supports_inpainting(),
+                )
+                """Region to edit in displayed image."""
+
+                # Show inpainting strength in place of reference images, and
+                # disable aspect ratio and resolution, while model inpaints a
+                # drawn box: inpainting ignores them.
+                inpaint_settings = [
+                    ref_images_column,
+                    inpaint_strength_row,
+                    aspect_ratio,
+                    resolution,
+                ]
+                mask_bbox.drawn(
+                    lambda image_model: sync_ui_to_inpainting_mode(
+                        image_model, mask_bbox_drawn=True
+                    ),
+                    inputs=model,
+                    outputs=inpaint_settings,
+                    show_progress="hidden",
+                )
+                mask_bbox.cleared(
+                    lambda image_model: sync_ui_to_inpainting_mode(
+                        image_model, mask_bbox_drawn=False
+                    ),
+                    inputs=model,
+                    outputs=inpaint_settings,
+                    show_progress="hidden",
+                )
+
+                # On model load success, allow drawing a box only if model inpaints.
+                # Box drawn is kept, but ignored by models that don't inpaint.
+                model_load.success(
+                    lambda image_model, bbox: (
+                        gr.update(interactive=image_model.supports_inpainting()),
+                        *sync_ui_to_inpainting_mode(
+                            image_model, mask_bbox_drawn=bool(bbox)
+                        ),
+                    ),
+                    inputs=[model, mask_bbox],
+                    outputs=[mask_bbox, *inpaint_settings],
+                    show_progress="hidden",
+                )
+
                 output_images_paths = gr.State(value={})
                 """Output images paths indexed by image ID."""
 
@@ -786,10 +853,14 @@ if __name__ == "__main__":
                         outputs=delete_output_image_btn,
                     )
 
+                    # Once gallery is empty, clear mask bbox: see `mask_bbox.cleared`.
                     gallery_images.change(
-                        lambda images: gr.update(visible=bool(images)),
+                        lambda images: (
+                            gr.update(visible=bool(images)),
+                            gr.update() if images else None,
+                        ),
                         inputs=gallery_images,
-                        outputs=delete_output_image_btn,
+                        outputs=[delete_output_image_btn, mask_bbox],
                     )
 
                     open_output_folder_btn = gr.Button(
@@ -901,6 +972,9 @@ if __name__ == "__main__":
                 gallery_images,
                 output_images_paths,
                 lora_name,
+                mask_bbox,
+                inpaint_strength,
+                selected_image_index,
             ],
             outputs=[
                 gallery_images,

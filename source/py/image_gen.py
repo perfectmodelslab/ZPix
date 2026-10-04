@@ -16,6 +16,12 @@ from source.py.image_model import ImageModel
 from source.py.image_pipe import ImagePipeline
 from source.py.output_image import OutputImage
 from source.py.ref_images import normalize_ref_image
+from source.py.regional_edits import (
+    create_inpaint_pipe,
+    get_inpaint_kwargs,
+    get_inpaint_source,
+    paste_inpainted,
+)
 from source.py.resolutions import parse_resolution
 
 
@@ -35,6 +41,9 @@ def generate(
     gallery_images: list[tuple] | None,
     images_paths: dict[str, str],
     lora_name: str | None,
+    mask_bbox: dict[str, int] | None,
+    inpaint_strength: float,
+    selected_image_index: int | None,
 ) -> tuple[list[tuple], int, dict[str, str], int]:
     """Generate an image and possibly a seed, and update gallery.
 
@@ -54,6 +63,9 @@ def generate(
         gallery_images: Existing gallery images to append to.
         images_paths: Dictionary mapping images IDs to output paths.
         lora_name: Name of loaded LoRA (e.g. "Retro_Anime").
+        mask_bbox: Region drawn over displayed image to edit, if any.
+        inpaint_strength: How much of the region to edit to regenerate.
+        selected_image_index: Index of image displayed in gallery, if any.
     Returns:
         Tuple of (updated gallery, last image index, output paths, used seed).
 
@@ -89,6 +101,16 @@ def generate(
     ):
         ref_images = [normalize_ref_image(file) for file in reference_images["files"]]
 
+    # Regenerate drawn region of displayed image, at its resolution.
+    inpaint_source = get_inpaint_source(
+        model, mask_bbox, gallery_images, selected_image_index
+    )
+
+    if inpaint_source:
+        pipe = create_inpaint_pipe(pipe, model.family)
+        width, height = inpaint_source.size
+        ref_images = []
+
     # Strength-based pipelines (e.g. Anima, Z-Image) condition on a single
     # reference image via the batch dimension.
     uses_strength = image_pipe.supports_strength()
@@ -101,7 +123,7 @@ def generate(
     # above pour it into the latents it starts from and denoise the picture
     # alone, while the others append it to the stream, at a size the image
     # pipeline reads as they encode it.
-    references = 0 if uses_strength else len(ref_images)
+    references = 0 if uses_strength or inpaint_source else len(ref_images)
 
     image_pipe.fit_to_resolution(width, height, references)
 
@@ -137,6 +159,11 @@ def generate(
         else:
             pipe_kwargs["image"] = ref_images
 
+    if inpaint_source:
+        pipe_kwargs.update(
+            get_inpaint_kwargs(inpaint_source, mask_bbox, inpaint_strength)  # ty: ignore
+        )
+
     with BlockingTask.run(t("Please try again shortly, an image is being generated.")):
         try:
             image = pipe(**pipe_kwargs).images[0]  # ty: ignore
@@ -147,6 +174,9 @@ def generate(
 
             gr.Info(t("Regenerating same image..."), duration=8)
             image = pipe(**pipe_kwargs).images[0]  # ty: ignore
+
+    if inpaint_source:
+        image = paste_inpainted(inpaint_source, mask_bbox, image)  # ty: ignore
 
     output_image = OutputImage(image, output_dir, lora_name)
     output_image.embed_settings(model, prompt, used_seed, steps, cfg)

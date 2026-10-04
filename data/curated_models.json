@@ -6,7 +6,8 @@
         "family": "Z-Image",
         "default": {
             "steps": 8,
-            "cfg": 0.0
+            "cfg": 0.0,
+            "inpaint_strength": 0.6
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -39,7 +40,8 @@
         "family": "Anima",
         "default": {
             "steps": 8,
-            "cfg": 1.0
+            "cfg": 1.0,
+            "inpaint_strength": 0.3
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -50,7 +52,8 @@
         "family": "Anima",
         "default": {
             "steps": 30,
-            "cfg": 4.0
+            "cfg": 4.0,
+            "inpaint_strength": 0.4
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -61,7 +64,8 @@
         "family": "Krea 2",
         "default": {
             "steps": 8,
-            "cfg": 0.0
+            "cfg": 0.0,
+            "inpaint_strength": 0.4
         },
         "features": ["text-to-image"]
     },

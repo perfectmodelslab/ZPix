@@ -84,7 +84,8 @@ async function uploadDroppedImage(event) {
     }
 
     const imageUrl = event.dataTransfer.getData("text/uri-list")
-    // Chrome drops a gallery image as a file, Firefox as the URL set on drag.
+    // Chrome drops a gallery image as a file, Firefox and MaskBoundingBox
+    // as its URL.
     if (!imageUrl || event.dataTransfer.files.length) return
 
     event.preventDefault() // Firefox would write the URL in the prompt.

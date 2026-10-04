@@ -20,6 +20,11 @@
     z-index: 1000;
 }
 
+/* Only groups reference images rows to hide them at once: layout as if absent. */
+#ref-images-column:not(.hidden) {
+    display: contents;
+}
+
 #model-status .pac-loader {
     margin-left: .5em;
 }

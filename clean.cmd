@@ -28,14 +28,11 @@ if /i "%DELETE_PROMPTS_DB%"=="y" (
 rem Prompts history as a SQLite DB was only available in ZPix v1.0.5.
 
 echo Cleaning now local cache and temp files...
-rmdir /s /q "__pycache__" >nul 2>&1
-rmdir /s /q ".ruff_cache" >nul 2>&1
 rmdir /s /q ".venv" >nul 2>&1
 rmdir /s /q "build" >nul 2>&1
 rmdir /s /q "cache" >nul 2>&1
-rmdir /s /q "dist" >nul 2>&1
-rmdir /s /q "source\py\__pycache__" >nul 2>&1
 rmdir /s /q "vcpkg_installed" >nul 2>&1
+for /d /r %%d in (node_modules __pycache__ .ruff_cache dist) do if exist "%%d" rmdir /s /q "%%d"
 rmdir /s /q "%TEMP%\ZPix" >nul 2>&1
 
 echo Done.

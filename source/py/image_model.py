@@ -12,6 +12,9 @@ class Settings(BaseModel):
     cfg: float
     """Classifier-free guidance scale."""
 
+    inpaint_strength: float = 0.6
+    """Inpainting strength, for models that inpaint."""
+
 
 class ImageModel(BaseModel):
     """An image model."""
@@ -44,6 +47,16 @@ class ImageModel(BaseModel):
         ]
     ]
     """Features supported by this model."""
+
+    def supports_inpainting(self) -> bool:
+        """Does this model's family support inpainting?"""
+        return self.family in (
+            "Anima",
+            "FLUX.2",
+            "Krea 2",
+            "Qwen-Image 2.1",
+            "Z-Image",
+        )
 
     def has_modular_pipeline(self) -> bool:
         """Does this model's family has a Diffusers modular pipeline?"""
