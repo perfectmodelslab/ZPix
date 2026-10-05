@@ -181,8 +181,9 @@ textarea:focus-visible {
     height: var(--size-16);
 }
 
-#gallery .thumbnail-item:focus-visible {
-    outline-offset: -2px; /* Follow corners */
+#gallery .thumbnail-item:focus {
+    outline: 2px solid var(--body-text-color) !important;
+    outline-offset: -2px; /* Flush with edges, follow corners */
 }
 
 #delete-output-image-btn {
