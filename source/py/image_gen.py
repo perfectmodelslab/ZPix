@@ -27,6 +27,7 @@ from source.py.regional_edits import (
     create_inpaint_pipe,
     get_inpaint_kwargs,
     get_inpaint_source,
+    keep_outside_region,
 )
 from source.py.resolutions import parse_resolution
 
@@ -191,6 +192,9 @@ def generate(
 
             gr.Info(t("Regenerating same image..."), duration=8)
             image = pipe(**pipe_kwargs).images[0]  # ty: ignore
+
+        if inpaint_source:
+            image = keep_outside_region(inpaint_source, image, lasso)  # ty: ignore
 
         if inpaint_source and high_res_fix_factor:
 

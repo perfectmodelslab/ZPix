@@ -7,7 +7,8 @@ from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
 )
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.z_image.pipeline_z_image_inpaint import ZImageInpaintPipeline
-from PIL import Image
+from gradio_lasso_tool import lasso_to_mask
+from PIL import Image, ImageDraw, ImageFilter
 
 from source.py.anima_inpaint import create_anima_inpaint_pipe
 from source.py.image_model import ImageModel
@@ -22,6 +23,13 @@ INPAINT_PIPELINES: dict[str, tuple[type[DiffusionPipeline], int]] = {
 """Inpaint pipeline of each family whose models support inpainting, except
 Anima, Krea 2 and Qwen-Image 2.1, which Diffusers ships no inpaint pipeline for,
 and the references it appends to the denoised stream."""
+
+LATENT_CELL = 16
+"""Pixels per latent cell, at most: the region regenerated is the cells the
+lasso covers, so it can spill that far out of the lasso."""
+
+FEATHER_RADIUS = 4
+"""Blur of the edge the source image is pasted back along, so no seam shows."""
 
 
 def sync_ui_to_inpainting_mode(
@@ -107,3 +115,30 @@ def get_inpaint_kwargs(
         # At 1, region is regenerated from scratch, guided by its context.
         "strength": strength,
     }
+
+
+def keep_outside_region(
+    inpaint_source: Image.Image, image: Image.Image, lasso: list[tuple[int, int]]
+) -> Image.Image:
+    """Paste the source image back outside the region regenerated in image.
+
+    The whole image goes through the VAE, so its pixels drift even outside the
+    region: pasted back, they match the source image, edit after edit.
+    """
+    region_mask = lasso_to_mask(lasso, inpaint_source.size)
+    # Grown past what spilled out of the lasso, so the feather lies where both
+    # images only differ by drift. Goes on to the second vertex, else the first
+    # one is the only joint not rounded.
+    ImageDraw.Draw(region_mask).line(
+        [*lasso, *lasso[:2]],
+        fill=255,
+        width=2 * (LATENT_CELL + 2 * FEATHER_RADIUS) + 1,
+        joint="curve",
+    )
+
+    kept_image = inpaint_source.copy()
+    kept_image.paste(
+        image, mask=region_mask.filter(ImageFilter.GaussianBlur(FEATHER_RADIUS))
+    )
+
+    return kept_image
