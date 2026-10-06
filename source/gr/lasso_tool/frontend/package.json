@@ -1,7 +1,7 @@
 {
-  "name": "gradio_maskboundingbox",
-  "version": "0.0.1",
-  "description": "Bounding box overlay drawn over a Gradio gallery image",
+  "name": "gradio_lasso_tool",
+  "version": "1.0.0",
+  "description": "Freehand lasso drawn over a Gradio gallery image",
   "type": "module",
   "author": "",
   "license": "GPL-3.0-or-later",

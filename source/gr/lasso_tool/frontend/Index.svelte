@@ -1,31 +1,29 @@
 <svelte:options accessors={true} />
 
 <script lang="ts">
-	import type { MaskBoundingBoxProps, MaskBoundingBoxEvents } from "./types";
+	import type { LassoToolProps, LassoToolEvents } from "./types";
 	import { Gradio } from "@gradio/utils";
 	import { onDestroy, onMount } from "svelte";
-	import { BoundingBoxOverlay, OVERLAY_TAG, type BoundingBox } from "./overlay";
+	import { LassoOverlay, OVERLAY_TAG, type Point } from "./lasso";
 
 	const props = $props();
-	const gradio = new Gradio<MaskBoundingBoxEvents, MaskBoundingBoxProps>(
-		props
-	);
+	const gradio = new Gradio<LassoToolEvents, LassoToolProps>(props);
 
 	// This component renders nothing in place: its overlay goes
 	// into the gallery, over the displayed (preview) image.
-	const overlay = document.createElement(OVERLAY_TAG) as BoundingBoxOverlay;
+	const overlay = document.createElement(OVERLAY_TAG) as LassoOverlay;
 
-	let old_value: BoundingBox | null = gradio.props.value ?? null;
+	let old_value: Point[] | null = gradio.props.value ?? null;
 	overlay.value = old_value;
 
 	let observer: MutationObserver | null = null;
 
-	function same_bbox(a: BoundingBox | null, b: BoundingBox | null): boolean {
+	function same_lasso(a: Point[] | null, b: Point[] | null): boolean {
 		return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 	}
 
-	/** Tell whether bounding box appeared or disappeared, if so. */
-	function dispatch_presence(old: BoundingBox | null, value: BoundingBox | null): void {
+	/** Tell whether lasso appeared or disappeared, if so. */
+	function dispatch_presence(old: Point[] | null, value: Point[] | null): void {
 		if (!old && value) gradio.dispatch("drawn");
 		else if (old && !value) gradio.dispatch("cleared");
 	}
@@ -75,8 +73,8 @@
 
 	onMount(() => {
 		// Not passed back to overlay, which emitted it.
-		overlay.addEventListener("bbox-change", (event) => {
-			const value = (event as CustomEvent<BoundingBox | null>).detail;
+		overlay.addEventListener("lasso-change", (event) => {
+			const value = (event as CustomEvent<Point[] | null>).detail;
 			dispatch_presence(old_value, value);
 			old_value = value;
 			gradio.props.value = value;
@@ -96,7 +94,7 @@
 	// Value set by an event.
 	$effect(() => {
 		const value = gradio.props.value ?? null;
-		if (!same_bbox(value, old_value)) {
+		if (!same_lasso(value, old_value)) {
 			dispatch_presence(old_value, value);
 			old_value = value;
 			overlay.value = value;
@@ -107,6 +105,7 @@
 	$effect(() => {
 		overlay.toggleAttribute("disabled", gradio.shared.interactive === false);
 		overlay.toggleAttribute("hidden", gradio.shared.visible === false);
+		overlay.toggleAttribute("static", gradio.props.marching_ants === false);
 		overlay.tooltips = [
 			gradio.props.draw_tooltip ?? "",
 			gradio.props.clear_tooltip ?? ""
@@ -116,7 +115,7 @@
 
 <style>
 	/* Overlay is positioned against the image parent. */
-	:global(:has(> mask-bounding-box-overlay)) {
+	:global(:has(> lasso-tool-overlay)) {
 		position: relative;
 	}
 </style>

@@ -1,4 +1,4 @@
-# MaskBoundingBox component hot reload demo for Windows.
+# LassoTool component hot reload demo for Windows.
 
 $ErrorActionPreference = 'Stop'
 

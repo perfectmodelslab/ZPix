@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { BoundingBox } from "./overlay";
+	import type { Point } from "./lasso";
 
-	export let value: BoundingBox | null;
+	export let value: Point[] | null;
 	export let type: "gallery" | "table";
 	export let selected = false;
 </script>
@@ -12,7 +12,7 @@
 	class:selected
 >
 	{#if value}
-		{value.x}, {value.y} · {value.width}×{value.height}
+		{value.length} points
 	{:else}
 		—
 	{/if}

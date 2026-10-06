@@ -9,7 +9,7 @@ from shutil import rmtree
 
 import gradio as gr
 import torch
-from gradio_maskboundingbox import MaskBoundingBox
+from gradio_lasso_tool import LassoTool
 
 # Force tensorwise FP8 matmul kernels as a fallback on hardware that lacks
 # native row-wise FP8 support, such as consumer NVIDIA Blackwell cards.
@@ -289,7 +289,7 @@ if __name__ == "__main__":
                         show_progress="hidden",
                     )
 
-                # Hidden in place of inpainting strength when a mask bbox is drawn.
+                # Hidden in place of inpainting strength when a lasso is drawn.
                 with gr.Column(elem_id="ref-images-column") as ref_images_column:
                     with gr.Row(
                         # A row hidden on startup is not mounted by Gradio,
@@ -339,7 +339,7 @@ if __name__ == "__main__":
                     show_progress="hidden",
                 )
 
-                # Shown in place of reference images when a mask bbox is drawn.
+                # Shown in place of reference images when a lasso is drawn.
                 with gr.Row(elem_classes=["hidden"]) as inpaint_strength_row:
                     inpaint_strength = gr.Slider(
                         label=t("Inpainting Strength"),
@@ -734,9 +734,9 @@ if __name__ == "__main__":
                     interactive=False,
                     elem_id="gallery",
                 )
-                mask_bbox = MaskBoundingBox(
+                lasso = LassoTool(
                     gallery=gallery_images,
-                    draw_tooltip=t("Draw a box to enable inpainting"),
+                    draw_tooltip=t("Draw a region to enable inpainting"),
                     clear_tooltip=t("Click to exit inpainting mode"),
                     interactive=initial_model.supports_inpainting(),
                 )
@@ -744,41 +744,41 @@ if __name__ == "__main__":
 
                 # Show inpainting strength in place of reference images, and
                 # disable aspect ratio and resolution, while model inpaints a
-                # drawn box: inpainting ignores them.
+                # drawn lasso: inpainting ignores them.
                 inpaint_settings = [
                     ref_images_column,
                     inpaint_strength_row,
                     aspect_ratio,
                     resolution,
                 ]
-                mask_bbox.drawn(
+                lasso.drawn(
                     lambda image_model: sync_ui_to_inpainting_mode(
-                        image_model, mask_bbox_drawn=True
+                        image_model, lasso_drawn=True
                     ),
                     inputs=model,
                     outputs=inpaint_settings,
                     show_progress="hidden",
                 )
-                mask_bbox.cleared(
+                lasso.cleared(
                     lambda image_model: sync_ui_to_inpainting_mode(
-                        image_model, mask_bbox_drawn=False
+                        image_model, lasso_drawn=False
                     ),
                     inputs=model,
                     outputs=inpaint_settings,
                     show_progress="hidden",
                 )
 
-                # On model load success, allow drawing a box only if model inpaints.
-                # Box drawn is kept, but ignored by models that don't inpaint.
+                # On model load success, allow drawing a lasso only if model inpaints.
+                # Lasso drawn is kept, but ignored by models that don't inpaint.
                 model_load.success(
-                    lambda image_model, bbox: (
+                    lambda image_model, points: (
                         gr.update(interactive=image_model.supports_inpainting()),
                         *sync_ui_to_inpainting_mode(
-                            image_model, mask_bbox_drawn=bool(bbox)
+                            image_model, lasso_drawn=bool(points)
                         ),
                     ),
-                    inputs=[model, mask_bbox],
-                    outputs=[mask_bbox, *inpaint_settings],
+                    inputs=[model, lasso],
+                    outputs=[lasso, *inpaint_settings],
                     show_progress="hidden",
                 )
 
@@ -853,14 +853,14 @@ if __name__ == "__main__":
                         outputs=delete_output_image_btn,
                     )
 
-                    # Once gallery is empty, clear mask bbox: see `mask_bbox.cleared`.
+                    # Once gallery is empty, clear lasso: see `lasso.cleared`.
                     gallery_images.change(
                         lambda images: (
                             gr.update(visible=bool(images)),
                             gr.update() if images else None,
                         ),
                         inputs=gallery_images,
-                        outputs=[delete_output_image_btn, mask_bbox],
+                        outputs=[delete_output_image_btn, lasso],
                     )
 
                     open_output_folder_btn = gr.Button(
@@ -972,7 +972,7 @@ if __name__ == "__main__":
                 gallery_images,
                 output_images_paths,
                 lora_name,
-                mask_bbox,
+                lasso,
                 inpaint_strength,
                 selected_image_index,
             ],

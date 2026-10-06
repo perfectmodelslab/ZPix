@@ -1,14 +1,15 @@
 import type { ILoadingStatus as LoadingStatus } from "@gradio/statustracker";
-import type { BoundingBox } from "./overlay";
+import type { Point } from "./lasso";
 
-export interface MaskBoundingBoxProps {
-	value: BoundingBox | null;
+export interface LassoToolProps {
+	value: Point[] | null;
 	gallery_elem_id: string | null;
 	draw_tooltip: string | null;
 	clear_tooltip: string | null;
+	marching_ants: boolean;
 }
 
-export interface MaskBoundingBoxEvents {
+export interface LassoToolEvents {
 	change: never;
 	input: never;
 	drawn: never;

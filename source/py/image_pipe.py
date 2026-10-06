@@ -398,6 +398,9 @@ class ImagePipeline:
         """Pixels of the references encoded so far this run, at their encoded
         size."""
 
+        self.input_name = "reference"
+        """What the references of the coming run are, as logged."""
+
         self.offload_strategy: DenoiserFirstOffloadStrategy | None = None
         """Strategy evicting the components, `None` when none is in play."""
 
@@ -512,6 +515,7 @@ class ImagePipeline:
         self.picture = (0, 0)
         self.references_to_encode = 0
         self.reference_pixels = 0
+        self.input_name = "reference"
 
         self.log_gpu_state()
         self.read_run_memory()
@@ -873,7 +877,13 @@ class ImagePipeline:
             else "Compilation wrote nothing: these kernels were previously cached."
         )
 
-    def fit_to_resolution(self, width: int, height: int, references: int = 0) -> None:
+    def fit_to_resolution(
+        self,
+        width: int,
+        height: int,
+        references: int = 0,
+        input_name: str = "reference",
+    ) -> None:
         """Set the pipeline up for the size of the picture about to be made.
 
         Settles what the phases before the loop need. The loop's own arrangement
@@ -884,6 +894,8 @@ class ImagePipeline:
             height: Height of the picture to generate, in pixels.
             references: Reference images the denoiser reads beside the picture,
                 none of them where a family conditions otherwise.
+            input_name: What the references are, as logged (e.g.
+                "inpaint source").
         """
         # All the generation before still owes, nothing being measured off it.
         if self.warmed_up_run:
@@ -895,6 +907,7 @@ class ImagePipeline:
         self.picture = (width, height)
         self.references_to_encode = references
         self.reference_pixels = 0
+        self.input_name = input_name
         self.kept_keys.clear()
 
         self.fit_stream()
@@ -924,7 +937,8 @@ class ImagePipeline:
             logger.info(
                 f"Denoising {stream_pixels / PIXELS_PER_MEGAPIXEL:.1f}MP: the "
                 f"{pixels / PIXELS_PER_MEGAPIXEL:.1f}MP output and "
-                f"{self.reference_pixels / PIXELS_PER_MEGAPIXEL:.1f}MP of reference."
+                f"{self.reference_pixels / PIXELS_PER_MEGAPIXEL:.1f}MP of "
+                f"{self.input_name}."
             )
 
         # Compiled per shape, so a size never generated is a size still to

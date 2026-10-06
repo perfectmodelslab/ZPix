@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "gradio_maskboundingbox"
-version = "0.0.1"
-description = "Bounding box overlay drawn over a Gradio gallery image"
+name = "gradio_lasso_tool"
+version = "1.0.0"
+description = "Freehand lasso drawn over a Gradio gallery image"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.14"
 # Required by Gradio to detect a custom component.
@@ -13,10 +13,10 @@ keywords = ["gradio-custom-component"]
 dependencies = ["gradio>=6.0,<7.0"]
 
 [tool.hatch.build]
-artifacts = ["/backend/gradio_maskboundingbox/templates", "*.pyi"]
+artifacts = ["/backend/gradio_lasso_tool/templates", "*.pyi"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["/backend/gradio_maskboundingbox"]
+packages = ["/backend/gradio_lasso_tool"]
 
 [tool.ruff]
 extend-exclude = ["*.pyi"]

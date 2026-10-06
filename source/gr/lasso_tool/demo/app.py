@@ -1,12 +1,12 @@
-"""MaskBoundingBox demo."""
+"""LassoTool demo."""
 
 import gradio as gr
-from gradio_maskboundingbox import MaskBoundingBox
+from gradio_lasso_tool import LassoTool
 from PIL import Image, ImageDraw
 
 
 def make_image(width: int, height: int, color: str) -> Image.Image:
-    """Make a test image with a 100px grid, to check bounding box coordinates."""
+    """Make a test image with a 100px grid, to check lasso coordinates."""
     image = Image.new("RGB", (width, height), color)
     draw = ImageDraw.Draw(image)
 
@@ -35,22 +35,22 @@ with gr.Blocks(analytics_enabled=False) as demo:
         interactive=False,
         height=600,
     )
-    mask_bbox = MaskBoundingBox(
+    lasso = LassoTool(
         gallery=gallery,
-        draw_tooltip="Draw a box for a precise edit",
-        clear_tooltip="Click to clear the bounding box",
+        draw_tooltip="Drag to draw a lasso",
+        clear_tooltip="Click to clear the lasso",
     )
 
     with gr.Row():
-        output = gr.JSON(label="Bounding box")
+        output = gr.JSON(label="Lasso")
         clear_btn = gr.Button("Clear")
-        preset_btn = gr.Button("Set 100, 100, 300×200")
+        preset_btn = gr.Button("Set triangle 100, 400 · 300, 100 · 500, 400")
 
-    mask_bbox.change(lambda bbox: bbox, inputs=mask_bbox, outputs=output)
-    clear_btn.click(lambda: None, outputs=mask_bbox)
+    lasso.change(lambda points: points, inputs=lasso, outputs=output)
+    clear_btn.click(lambda: None, outputs=lasso)
     preset_btn.click(
-        lambda: {"x": 100, "y": 100, "width": 300, "height": 200},
-        outputs=mask_bbox,
+        lambda: [(100, 400), (300, 100), (500, 400)],
+        outputs=lasso,
     )
 
 

@@ -1,4 +1,4 @@
-"""MaskBoundingBox Gradio custom component."""
+"""LassoTool Gradio custom component."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 from gradio.components.base import Component
-from gradio.data_classes import GradioModel
+from gradio.data_classes import GradioRootModel
 from gradio.events import Events
 from PIL import Image, ImageDraw
 
@@ -15,37 +15,33 @@ if TYPE_CHECKING:
     from gradio.components import Gallery, Timer
 
 
-class BoundingBox(GradioModel):
-    """Bounding box in pixels of the original image."""
+class Lasso(GradioRootModel):
+    """Lasso vertices in pixels of the original image."""
 
-    x: int
-    y: int
-    width: int
-    height: int
+    root: list[tuple[int, int]]
 
 
-def mask_bbox_to_image(bbox: dict[str, int], size: tuple[int, int]) -> Image.Image:
-    """Make the mask of a bounding box, e.g. to inpaint its region.
+def lasso_to_mask(points: list[tuple[int, int]], size: tuple[int, int]) -> Image.Image:
+    """Make the mask of a lasso, e.g. to inpaint its region.
 
     Args:
-        bbox: Bounding box, as MaskBoundingBox passes it.
+        points: Lasso vertices, as LassoTool passes them.
         size: Width and height of the image to mask.
 
     Returns:
-        Grayscale image, white inside the bounding box and black outside.
+        Grayscale image, white inside the lasso and black outside.
     """
     mask = Image.new("L", size, 0)
-    right = bbox["x"] + bbox["width"] - 1
-    bottom = bbox["y"] + bbox["height"] - 1
-    ImageDraw.Draw(mask).rectangle((bbox["x"], bbox["y"], right, bottom), fill=255)
+    # Closes the lasso from its last vertex to its first, as drawn.
+    ImageDraw.Draw(mask).polygon(points, fill=255)
 
     return mask
 
 
-class MaskBoundingBox(Component):
+class LassoTool(Component):
     """
-    Lets user draw, move and resize a bounding box over the image displayed
-    by a gallery, e.g. to mask a region to edit.
+    Lets user draw a freehand lasso over the image displayed by a gallery,
+    e.g. to mask a region to edit.
     """
 
     EVENTS = [  # noqa: RUF012 (Gradio API)
@@ -55,15 +51,16 @@ class MaskBoundingBox(Component):
         "cleared",
     ]
 
-    data_model = BoundingBox
+    data_model = Lasso
 
     def __init__(
         self,
-        value: dict[str, int] | Callable | None = None,
+        value: list[tuple[int, int]] | Callable | None = None,
         *,
         gallery: Gallery | None = None,
         draw_tooltip: str | None = None,
         clear_tooltip: str | None = None,
+        marching_ants: bool = True,
         every: Timer | float | None = None,
         inputs: Component | Sequence[Component] | set[Component] | None = None,
         interactive: bool | None = None,
@@ -76,14 +73,15 @@ class MaskBoundingBox(Component):
     ):
         """
         Parameters:
-            value: default bounding box, as a dict with `x`, `y`, `width` and `height` keys in pixels of the original image. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
-            gallery: the gallery whose displayed (preview) image the bounding box is drawn over. If it has no `elem_id`, one is assigned to find it in the DOM.
-            draw_tooltip: shown over the image while no bounding box is drawn, e.g. to tell user how to draw one.
-            clear_tooltip: shown over the image, outside the bounding box once drawn, e.g. to tell user how to clear it.
+            value: default lasso, as a list of `(x, y)` vertices in pixels of the original image. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
+            gallery: the gallery whose displayed (preview) image the lasso is drawn over. If it has no `elem_id`, one is assigned to find it in the DOM.
+            draw_tooltip: shown over the image while no lasso is drawn, e.g. to tell user how to draw one.
+            clear_tooltip: shown over the image once a lasso is drawn, e.g. to tell user how to clear it.
+            marching_ants: if True, the outline of the drawn lasso is animated. If False, it stays still.
             every: Continuously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
             inputs: Components that are used as inputs to calculate `value` if `value` is a function (has no effect otherwise). `value` is recalculated any time the inputs change.
-            interactive: if False, the bounding box can't be drawn, moved or resized. If not provided, the component is interactive unless it's only used as an event output.
-            visible: If False, the bounding box is not displayed.
+            interactive: if False, the lasso can't be drawn or cleared. If not provided, the component is interactive unless it's only used as an event output.
+            visible: If False, the lasso is not displayed.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM.
             render: If False, component will not render be rendered in the Blocks context. Should be used if the intention is to assign event listeners now but render the component later.
@@ -101,6 +99,7 @@ class MaskBoundingBox(Component):
 
         self.draw_tooltip = draw_tooltip
         self.clear_tooltip = clear_tooltip
+        self.marching_ants = marching_ants
 
         super().__init__(
             every=every,
@@ -122,36 +121,29 @@ class MaskBoundingBox(Component):
         config["gallery_elem_id"] = self.gallery_elem_id
         return config
 
-    def preprocess(self, payload: BoundingBox | None) -> dict[str, int] | None:
+    def preprocess(self, payload: Lasso | None) -> list[tuple[int, int]] | None:
         """
         Parameters:
-            payload: the bounding box drawn by user, if any.
+            payload: the lasso drawn by user, if any.
         Returns:
-            Passes bounding box as a {dict} with `x`, `y`, `width` and `height` keys (pixels of the original image), or None if there is no bounding box.
+            Passes lasso as a {list} of `(x, y)` vertices (pixels of the original image), or None if there is no lasso.
         """
-        return None if payload is None else payload.model_dump()
+        return None if payload is None else payload.root
 
-    def postprocess(self, value: dict[str, int] | None) -> BoundingBox | None:
+    def postprocess(self, value: list[tuple[int, int]] | None) -> Lasso | None:
         """
         Parameters:
-            value: Expects a {dict} with `x`, `y`, `width` and `height` keys (pixels of the original image), or None to clear the bounding box.
+            value: Expects a {list} of `(x, y)` vertices (pixels of the original image), or None to clear the lasso.
         Returns:
-            The bounding box to display.
+            The lasso to display.
         """
-        if value is None:
+        if value is None or len(value) < 3:
             return None
 
-        box = BoundingBox(
-            x=max(0, round(value["x"])),
-            y=max(0, round(value["y"])),
-            width=round(value["width"]),
-            height=round(value["height"]),
-        )
-
-        return box if box.width > 0 and box.height > 0 else None
+        return Lasso([(round(x), round(y)) for x, y in value])
 
     def example_payload(self) -> Any:
-        return {"x": 64, "y": 64, "width": 256, "height": 256}
+        return [(64, 320), (192, 64), (320, 320)]
 
     def example_value(self) -> Any:
-        return {"x": 64, "y": 64, "width": 256, "height": 256}
+        return [(64, 320), (192, 64), (320, 320)]

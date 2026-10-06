@@ -41,7 +41,7 @@
     "Steps": "Étapes",
     "Example Prompts": "Exemples de prompts",
     "Generated Images": "Images générées",
-    "Draw a box to enable inpainting": "Dessinez un cadre pour activer l'inpainting",
+    "Draw a region to enable inpainting": "Dessinez une zone pour activer l'inpainting",
     "Click to exit inpainting mode": "Cliquez pour quitter le mode inpainting",
     "Delete Image": "Supprimer l'image",
     "file included": "fichier inclus",

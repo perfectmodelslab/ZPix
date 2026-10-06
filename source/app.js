@@ -84,7 +84,7 @@ async function uploadDroppedImage(event) {
     }
 
     const imageUrl = event.dataTransfer.getData("text/uri-list")
-    // Chrome drops a gallery image as a file, Firefox and MaskBoundingBox
+    // Chrome drops a gallery image as a file, Firefox and LassoTool
     // as its URL.
     if (!imageUrl || event.dataTransfer.files.length) return
 
