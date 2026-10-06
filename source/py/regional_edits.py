@@ -26,12 +26,12 @@ and the references it appends to the denoised stream."""
 
 def sync_ui_to_inpainting_mode(
     model: ImageModel, *, lasso_drawn: bool
-) -> tuple[dict, dict, dict, dict, dict]:
+) -> tuple[dict, dict, dict, dict]:
     """Synchronize UI to inpainting mode.
 
     Returns:
-        Reference images column, inpainting strength row, High-Res Fix row,
-        aspect ratio and resolution updates.
+        Reference images column, inpainting settings row, aspect ratio and
+        resolution updates.
     """
     inpainting_mode = lasso_drawn and model.supports_inpainting()
 
@@ -39,9 +39,8 @@ def sync_ui_to_inpainting_mode(
     return (
         gr.update(elem_classes=["hidden"] if inpainting_mode else []),
         gr.update(elem_classes=[] if inpainting_mode else ["hidden"]),
-        gr.update(elem_classes=[] if inpainting_mode else ["hidden"]),
-        gr.update(interactive=not inpainting_mode),
-        gr.update(interactive=not inpainting_mode),
+        gr.update(visible="hidden" if inpainting_mode else True),
+        gr.update(visible="hidden" if inpainting_mode else True),
     )
 
 

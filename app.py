@@ -341,8 +341,9 @@ if __name__ == "__main__":
                 )
 
                 # Shown in place of reference images when a lasso is drawn.
-                with gr.Row(elem_classes=["hidden"]) as inpaint_strength_row:
+                with gr.Row(elem_classes=["hidden"]) as inpaint_settings_row:
                     inpaint_strength = gr.Slider(
+                        scale=3,
                         label=t("Inpainting Strength"),
                         # Below, few-step models have no step left to denoise.
                         minimum=0.3,
@@ -350,10 +351,8 @@ if __name__ == "__main__":
                         step=0.1,
                         value=initial_model.default.inpaint_strength,
                     )
-
-                # Shown with inpainting strength.
-                with gr.Row(elem_classes=["hidden"]) as high_res_fix_row:
                     high_res_fix_factor = gr.Dropdown(
+                        scale=1,
                         label=t("High-Res Fix"),
                         choices=[
                             (t("None"), 0),
@@ -758,12 +757,11 @@ if __name__ == "__main__":
                 """Region to edit in displayed image."""
 
                 # Show inpainting settings in place of reference images, and
-                # disable aspect ratio and resolution, while model inpaints a
+                # hide aspect ratio and resolution, while model inpaints a
                 # drawn lasso: inpainting ignores them.
                 inpaint_settings = [
                     ref_images_column,
-                    inpaint_strength_row,
-                    high_res_fix_row,
+                    inpaint_settings_row,
                     aspect_ratio,
                     resolution,
                 ]
