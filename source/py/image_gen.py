@@ -9,9 +9,16 @@ from shutil import rmtree
 import gradio as gr
 import torch
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
+from gradio_lasso_tool import lasso_to_mask
+from PIL import Image
 
 from source.py.blocking_task import BlockingTask
 from source.py.custom_logger import logger
+from source.py.high_res_fix import (
+    HIGH_RES_FIX_STRENGTH,
+    high_res_fix,
+    high_res_fix_steps,
+)
 from source.py.image_model import ImageModel
 from source.py.image_pipe import ImagePipeline
 from source.py.output_image import OutputImage
@@ -42,6 +49,7 @@ def generate(
     lora_name: str | None,
     lasso: list[tuple[int, int]] | None,
     inpaint_strength: float,
+    high_res_fix_factor: float,
     selected_image_index: int | None,
 ) -> tuple[list[tuple], int, dict[str, str], int]:
     """Generate an image and possibly a seed, and update gallery.
@@ -64,6 +72,8 @@ def generate(
         lora_name: Name of loaded LoRA (e.g. "Retro_Anime").
         lasso: Lasso drawn over displayed image around region to edit, if any.
         inpaint_strength: How much of the region to edit to regenerate.
+        high_res_fix_factor: How much to upscale the region to edit, to denoise
+            it a second time, or 0 not to.
         selected_image_index: Index of image displayed in gallery, if any.
     Returns:
         Tuple of (updated gallery, last image index, output paths, used seed).
@@ -168,9 +178,8 @@ def generate(
             pipe_kwargs["image"] = ref_images
 
     if inpaint_source:
-        pipe_kwargs.update(
-            get_inpaint_kwargs(inpaint_source, lasso, inpaint_strength)  # ty: ignore
-        )
+        mask = lasso_to_mask(lasso, inpaint_source.size)  # ty: ignore
+        pipe_kwargs.update(get_inpaint_kwargs(inpaint_source, mask, inpaint_strength))
 
     with BlockingTask.run(t("Please try again shortly, an image is being generated.")):
         try:
@@ -182,6 +191,20 @@ def generate(
 
             gr.Info(t("Regenerating same image..."), duration=8)
             image = pipe(**pipe_kwargs).images[0]  # ty: ignore
+
+        if inpaint_source and high_res_fix_factor:
+
+            def denoise(region: Image.Image, region_mask: Image.Image) -> Image.Image:
+                image_pipe.fit_to_resolution(
+                    *region.size, inpaint_references, input_name="inpaint source"
+                )
+                region_kwargs = get_inpaint_kwargs(
+                    region, region_mask, HIGH_RES_FIX_STRENGTH
+                )
+                region_kwargs["num_inference_steps"] = high_res_fix_steps(int(steps))
+                return pipe(**pipe_kwargs | region_kwargs).images[0]  # ty: ignore
+
+            image = high_res_fix(image, mask, high_res_fix_factor, denoise)
 
     output_image = OutputImage(image, output_dir, lora_name)
     output_image.embed_settings(model, prompt, used_seed, steps, cfg)

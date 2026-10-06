@@ -7,7 +7,6 @@ from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
 )
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.z_image.pipeline_z_image_inpaint import ZImageInpaintPipeline
-from gradio_lasso_tool import lasso_to_mask
 from PIL import Image
 
 from source.py.anima_inpaint import create_anima_inpaint_pipe
@@ -27,18 +26,19 @@ and the references it appends to the denoised stream."""
 
 def sync_ui_to_inpainting_mode(
     model: ImageModel, *, lasso_drawn: bool
-) -> tuple[dict, dict, dict, dict]:
+) -> tuple[dict, dict, dict, dict, dict]:
     """Synchronize UI to inpainting mode.
 
     Returns:
-        Reference images column, inpainting strength row, aspect ratio and
-        resolution updates.
+        Reference images column, inpainting strength row, High-Res Fix row,
+        aspect ratio and resolution updates.
     """
     inpainting_mode = lasso_drawn and model.supports_inpainting()
 
     # A row hidden on startup is not mounted by Gradio, hence the "hidden" class.
     return (
         gr.update(elem_classes=["hidden"] if inpainting_mode else []),
+        gr.update(elem_classes=[] if inpainting_mode else ["hidden"]),
         gr.update(elem_classes=[] if inpainting_mode else ["hidden"]),
         gr.update(interactive=not inpainting_mode),
         gr.update(interactive=not inpainting_mode),
@@ -94,15 +94,17 @@ def create_inpaint_pipe(
 
 
 def get_inpaint_kwargs(
-    inpaint_source: Image.Image, lasso: list[tuple[int, int]], strength: float
+    inpaint_source: Image.Image, mask: Image.Image, strength: float
 ) -> dict[str, object]:
-    """Get the inpaint pipeline arguments to regenerate the region in lasso.
+    """Get the inpaint pipeline arguments to regenerate the region in mask.
 
-    Model gets the whole image, so the region fits in it.
+    Model gets the whole image, at its size, so the region fits in it.
     """
     return {
         "image": inpaint_source,
-        "mask_image": lasso_to_mask(lasso, inpaint_source.size),
+        "mask_image": mask,
+        "width": inpaint_source.width,
+        "height": inpaint_source.height,
         # At 1, region is regenerated from scratch, guided by its context.
         "strength": strength,
     }

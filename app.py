@@ -25,6 +25,7 @@ from source.py.custom_theme import get_theme
 from source.py.disclaimer import TermsOfUse
 from source.py.ex_prompts import get_example_prompts
 from source.py.gallery_images import delete_image
+from source.py.high_res_fix import HIGH_RES_FIX_FACTORS
 from source.py.image_gen import generate
 from source.py.image_models import fetch_model, find_model, get_models
 from source.py.image_pipe import ImagePipeline
@@ -348,6 +349,20 @@ if __name__ == "__main__":
                         maximum=1.0,
                         step=0.1,
                         value=initial_model.default.inpaint_strength,
+                    )
+
+                # Shown with inpainting strength.
+                with gr.Row(elem_classes=["hidden"]) as high_res_fix_row:
+                    high_res_fix_factor = gr.Dropdown(
+                        label=t("High-Res Fix"),
+                        choices=[
+                            (t("None"), 0),
+                            *(
+                                (f"{factor:g}x", factor)
+                                for factor in HIGH_RES_FIX_FACTORS
+                            ),
+                        ],
+                        value=0,
                     )
 
                 with gr.Row():
@@ -742,12 +757,13 @@ if __name__ == "__main__":
                 )
                 """Region to edit in displayed image."""
 
-                # Show inpainting strength in place of reference images, and
+                # Show inpainting settings in place of reference images, and
                 # disable aspect ratio and resolution, while model inpaints a
                 # drawn lasso: inpainting ignores them.
                 inpaint_settings = [
                     ref_images_column,
                     inpaint_strength_row,
+                    high_res_fix_row,
                     aspect_ratio,
                     resolution,
                 ]
@@ -974,6 +990,7 @@ if __name__ == "__main__":
                 lora_name,
                 lasso,
                 inpaint_strength,
+                high_res_fix_factor,
                 selected_image_index,
             ],
             outputs=[
