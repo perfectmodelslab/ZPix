@@ -7,6 +7,9 @@ name = "gradio_lasso_tool"
 version = "1.0.0"
 description = "Freehand lasso drawn over a Gradio gallery image"
 license = "GPL-3.0-or-later"
+# Third-party notices, as their licenses require, since the frontend bundles
+# their code. The build strips them from it.
+license-files = ["NOTICE.txt"]
 requires-python = ">=3.14"
 # Required by Gradio to detect a custom component.
 keywords = ["gradio-custom-component"]

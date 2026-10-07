@@ -44,6 +44,8 @@
     "Example Prompts": "Exemples de prompts",
     "Generated Images": "Images générées",
     "Draw a region to enable inpainting": "Dessinez une zone pour activer l'inpainting",
+    "Hold Shift to enlarge selection": "Maintenez Maj pour agrandir la sélection",
+    "Hold Alt to reduce selection": "Maintenez Alt pour réduire la sélection",
     "Click to exit inpainting mode": "Cliquez pour quitter le mode inpainting",
     "Delete Image": "Supprimer l'image",
     "file included": "fichier inclus",

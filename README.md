@@ -132,6 +132,9 @@ Python packages:
 
 Python tools: [uv](https://github.com/astral-sh/uv), [ty](https://github.com/astral-sh/ty) and [Ruff](https://github.com/astral-sh/ruff) by Astral
 
+JavaScript libraries:
+- [Polygon Clipping](https://github.com/mfogel/polygon-clipping) by Mike Fogel
+
 C++ libraries: [WebView2](https://learn.microsoft.com/microsoft-edge/webview2/) by Microsoft<br>
 C++ tools: [CMake](https://cmake.org/) by Kitware, and [vcpkg](https://github.com/microsoft/vcpkg) by Microsoft
 
@@ -140,7 +143,7 @@ Icons:
 - [Dice](https://www.flaticon.com/free-icon/dice_1714307) by Juicy Fish
 - [Folder](https://www.flaticon.com/free-icon/folder_2577144) by Freepik
 - [FAQ](https://www.freepik.com/icon/technology_13631866) by Kerismaker
-- [Refresh](https://lucide.dev/icons/refresh-ccw) by Lucide
+- [Refresh](https://lucide.dev/icons/refresh-ccw) and [Lasso](https://lucide.dev/icons/lasso) by Lucide
 
 ## Thanks
 

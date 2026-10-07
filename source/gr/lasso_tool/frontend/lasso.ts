@@ -6,8 +6,13 @@
  * Lasso vertices are in pixels of the original image.
  */
 
+import polygon_clipping from "polygon-clipping";
+
 /** `[x, y]`, as Python passes a vertex. */
 export type Point = [number, number];
+
+/** What a lasso drawn with a shortcut held does to the current one. */
+type Operation = "add" | "subtract";
 
 interface Size {
 	width: number;
@@ -40,14 +45,32 @@ const LASSO_ICON =
 	'<path d="M7 22a5 5 0 0 1-2-3.994"/>' +
 	'<circle cx="5" cy="16" r="2"/>';
 
-const LASSO_SVG =
-	'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" ' +
-	'viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">' +
-	`<g stroke="white" stroke-width="4">${LASSO_ICON}</g>` +
-	`<g stroke="black" stroke-width="2">${LASSO_ICON}</g></svg>`;
+/** Plus and minus signs, at the bottom right of the lasso icon. */
+const PLUS_SIGN = '<path d="M22 26h8M26 22v8"/>';
+const MINUS_SIGN = '<path d="M22 26h8"/>';
 
-const LASSO_CURSOR =
-	`url("data:image/svg+xml,${encodeURIComponent(LASSO_SVG)}") 5 15, crosshair`;
+/** Lasso cursor, with a sign if any, which makes it 24px instead of 16px. */
+function lasso_cursor(sign = ""): string {
+	const icon = LASSO_ICON + sign;
+	const size = sign ? 24 : 16;
+	// Same scale with or without a sign, hence the same hotspot.
+	const view_size = size * 1.5;
+	const svg =
+		`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" ` +
+		`viewBox="0 0 ${view_size} ${view_size}" fill="none" ` +
+		'stroke-linecap="round" stroke-linejoin="round">' +
+		`<g stroke="white" stroke-width="4">${icon}</g>` +
+		`<g stroke="black" stroke-width="2">${icon}</g></svg>`;
+
+	return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 5 15, crosshair`;
+}
+
+const LASSO_CURSOR = lasso_cursor();
+
+const OPERATION_CURSORS: Record<Operation, string> = {
+	add: lasso_cursor(PLUS_SIGN),
+	subtract: lasso_cursor(MINUS_SIGN)
+};
 
 const STYLE = `
 	:host {
@@ -127,14 +150,21 @@ export class LassoOverlay extends HTMLElement {
 	 */
 	area: HTMLElement | null = null;
 
+	/** Neighbors each vertex is averaged with on each side, to smooth the hand's jitter. */
+	smoothing = 1;
+
 	#tooltips: [string, string] = ["", ""];
 
 	#mode: "press" | "draw" | "drop" | null = null;
+	/** What lasso being drawn does to the current one, if not replace it. */
+	#operation: Operation | null = null;
+	/** Operation of the shortcut held while pointer is over overlay, if any. */
+	#held: Operation | null = null;
 	/** Where user pressed, in client pixels, to tell a click from a move. */
 	#press: Point | null = null;
 	/** Lasso as it was when user pressed, back if user cancels. */
 	#original: Point[] | null = null;
-	/** Lasso being drawn, which replaces the current one on release. */
+	/** Lasso being drawn, applied to the current one on release. */
 	#draft: Point[] | null = null;
 	/** Element outside overlay that pointer is over, while user drags image. */
 	#drop_target: Element | null = null;
@@ -154,6 +184,20 @@ export class LassoOverlay extends HTMLElement {
 		this.#cancel();
 	};
 
+	/** Tell what a drag would do, as user presses or releases a shortcut. */
+	#on_shortcut_key = (event: KeyboardEvent): void => {
+		// Pointer left without a pointerleave, e.g. overlay got disabled.
+		if (!this.matches(":hover")) {
+			this.#on_pointerleave();
+			return;
+		}
+
+		// Else Firefox shows its menu bar as Alt is released.
+		if (event.key === "Alt") event.preventDefault();
+
+		this.#hold(event);
+	};
+
 	constructor() {
 		super();
 
@@ -162,16 +206,19 @@ export class LassoOverlay extends HTMLElement {
 		style.textContent = STYLE;
 
 		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+		// Lasso being drawn goes over the one it adds to or subtracts from.
 		svg.innerHTML =
-			'<polyline id="draft"></polyline>' +
 			'<polygon id="lasso"></polygon>' +
-			'<polygon id="ants"></polygon>';
+			'<polygon id="ants"></polygon>' +
+			'<polyline id="draft"></polyline>';
 		this.#draft_el = svg.querySelector("#draft")!;
 		this.#lasso_el = svg.querySelector("#lasso")!;
 		this.#ants_el = svg.querySelector("#ants")!;
 
 		shadow.append(style, svg);
 
+		this.addEventListener("pointerenter", (e) => this.#on_pointerenter(e));
+		this.addEventListener("pointerleave", () => this.#on_pointerleave());
 		this.addEventListener("pointerdown", (e) => this.#on_pointerdown(e));
 		this.addEventListener("pointermove", (e) => this.#on_pointermove(e));
 		this.addEventListener("pointerup", () => this.#on_pointerup());
@@ -333,7 +380,11 @@ export class LassoOverlay extends HTMLElement {
 		const image = this.#target;
 		const loaded = !!natural_size(image);
 		const lasso = loaded ? this.#scaled() : null;
-		const draft = loaded && this.#mode === "draw" ? this.#draft : null;
+		// Smoothed as on release: last vertices settle as next ones come.
+		const draft =
+			loaded && this.#mode === "draw" && this.#draft
+				? smooth(this.#draft, this.#smoothing_radius())
+				: null;
 
 		this.title = this.#tooltips[lasso ? 1 : 0];
 
@@ -366,11 +417,33 @@ export class LassoOverlay extends HTMLElement {
 		this.dispatchEvent(new CustomEvent("lasso-change", { detail: lasso }));
 	}
 
+	#on_pointerenter(event: PointerEvent): void {
+		window.addEventListener("keydown", this.#on_shortcut_key, true);
+		window.addEventListener("keyup", this.#on_shortcut_key, true);
+		this.#hold(event);
+	}
+
+	#on_pointerleave(): void {
+		window.removeEventListener("keydown", this.#on_shortcut_key, true);
+		window.removeEventListener("keyup", this.#on_shortcut_key, true);
+		this.#held = null;
+		this.#update_cursor();
+	}
+
+	#hold(event: KeyboardEvent | PointerEvent): void {
+		const held = shortcut_operation(event);
+		if (held === this.#held) return;
+
+		this.#held = held;
+		this.#update_cursor();
+	}
+
 	/**
 	 * A click clears the lasso, and a drag draws a new one, which replaces
-	 * the current one at once and closes on release. User may as well drag
-	 * displayed image to another element, e.g. a prompt left of the gallery:
-	 * leaving the area (gallery) turns the drawing into a drop.
+	 * the current one at once and closes on release, or adds to it with Shift
+	 * held, or subtracts from it with Alt held. User may as well drag displayed
+	 * image to another element, e.g. a prompt left of the gallery: leaving the
+	 * area (gallery) turns the drawing into a drop.
 	 */
 	#on_pointerdown(event: PointerEvent): void {
 		if (!this.#target || event.button !== 0) return;
@@ -380,13 +453,15 @@ export class LassoOverlay extends HTMLElement {
 
 		this.#reset();
 
-		// User replaces lasso as displayed, i.e. scaled to this image.
+		// User edits lasso as displayed, i.e. scaled to this image.
 		this.#lasso = this.#scaled();
 		this.#size = natural_size(this.#target);
 		this.#original = this.#lasso;
 		this.#mode = "press";
+		this.#operation = shortcut_operation(event);
 		this.#press = [event.clientX, event.clientY];
 		this.#draft = [this.#point_from_event(event)];
+		this.#update_cursor();
 
 		this.setPointerCapture(event.pointerId);
 		// Captured before the gallery, which leaves preview on Escape.
@@ -394,6 +469,9 @@ export class LassoOverlay extends HTMLElement {
 	}
 
 	#on_pointermove(event: PointerEvent): void {
+		// Catches up on a shortcut pressed while window was inactive.
+		this.#hold(event);
+
 		if (!this.#target || !this.#mode) return;
 
 		if (this.#mode === "press") {
@@ -403,7 +481,8 @@ export class LassoOverlay extends HTMLElement {
 			}
 
 			this.#mode = "draw";
-			this.#lasso = null;
+			// A new lasso replaces the current one at once.
+			if (!this.#operation) this.#lasso = null;
 		}
 
 		if (this.#mode === "draw" && this.#left_area(event)) {
@@ -431,8 +510,9 @@ export class LassoOverlay extends HTMLElement {
 		const mode = this.#mode;
 
 		if (mode === "press") {
-			// A mere click.
-			this.clear();
+			// A mere click, which clears nothing with a shortcut held.
+			if (this.#operation) this.#reset();
+			else this.clear();
 		} else if (mode === "drop") {
 			if (this.#droppable) {
 				this.#drag_event(this.#drop_target!, "drop");
@@ -449,19 +529,32 @@ export class LassoOverlay extends HTMLElement {
 		if (this.#mode) this.#cancel();
 	}
 
-	/** Close lasso as user drew it, unless it encloses nothing. */
+	/** Close lasso as drawn, unless it encloses nothing, and apply it. */
 	#commit(): void {
-		const draft = this.#draft;
+		const draft = this.#draft && smooth(this.#draft, this.#smoothing_radius());
+		const operation = this.#operation;
+		const lasso = this.#lasso;
 		this.#reset();
 
-		if (!draft || draft.length < MIN_POINTS) {
-			this.clear();
-			return;
+		if (!operation) {
+			if (!draft || draft.length < MIN_POINTS) {
+				this.clear();
+				return;
+			}
+
+			this.#lasso = draft;
+		} else if (draft && draft.length >= MIN_POINTS) {
+			// Adding to no lasso draws one, subtracting from it does nothing.
+			if (!lasso) this.#lasso = operation === "add" ? draft : null;
+			else this.#lasso = combine(lasso, draft, operation) ?? lasso;
 		}
 
-		this.#lasso = draft;
 		this.#render();
 		this.#emit();
+	}
+
+	#smoothing_radius(): number {
+		return Math.max(0, Math.floor(this.smoothing)) || 0;
 	}
 
 	/** Back to lasso as it was before user pressed. */
@@ -477,18 +570,29 @@ export class LassoOverlay extends HTMLElement {
 
 		window.removeEventListener("keydown", this.#on_keydown, true);
 		this.#mode = null;
+		this.#operation = null;
 		this.#press = null;
 		this.#original = null;
 		this.#draft = null;
 		this.#drop_target = null;
 		this.#droppable = false;
 		this.#drag_data = null;
-		this.#set_cursor(null);
+		this.#update_cursor();
 	}
 
-	/** Cursor of ongoing gesture, if any, in place of the lasso. */
-	#set_cursor(cursor: string | null): void {
-		this.style.cursor = cursor ?? "";
+	/** Cursor of ongoing drop, if any, else of what a drag would do. */
+	#update_cursor(): void {
+		let cursor = "";
+
+		if (this.#mode === "drop") {
+			cursor = this.#droppable ? "copy" : "grabbing";
+		} else {
+			// Shortcut held as user pressed holds until release.
+			const operation = this.#mode ? this.#operation : this.#held;
+			if (operation) cursor = OPERATION_CURSORS[operation];
+		}
+
+		this.style.cursor = cursor;
 	}
 
 	/** Whether pointer left the area lasso is drawn within. */
@@ -519,7 +623,7 @@ export class LassoOverlay extends HTMLElement {
 
 		// Element accepts a drop by canceling dragover.
 		this.#droppable = !!target && !this.#drag_event(target, "dragover");
-		this.#set_cursor(this.#droppable ? "copy" : "grabbing");
+		this.#update_cursor();
 	}
 
 	/** Returns false if canceled. */
@@ -539,6 +643,75 @@ export class LassoOverlay extends HTMLElement {
 			})
 		);
 	}
+}
+
+/**
+ * Lasso with each vertex averaged with `radius` neighbors on each side, fewer
+ * near the ends, which stay put: averaging across the gap the lasso closes
+ * would pull them inward.
+ */
+function smooth(points: Point[], radius: number): Point[] {
+	const count = points.length;
+	if (radius === 0) return points;
+
+	return points.map((_point, i): Point => {
+		const reach = Math.min(radius, i, count - 1 - i);
+		let [x, y] = [0, 0];
+
+		for (let j = i - reach; j <= i + reach; j++) {
+			x += points[j][0];
+			y += points[j][1];
+		}
+
+		const span = 2 * reach + 1;
+		return [x / span, y / span];
+	});
+}
+
+/** Shift adds, Alt subtracts. */
+function shortcut_operation(event: KeyboardEvent | PointerEvent): Operation | null {
+	if (event.shiftKey) return "add";
+	if (event.altKey) return "subtract";
+	return null;
+}
+
+/**
+ * Union or difference of two lassos, or null if empty or if polygon-clipping
+ * fails. A lasso encloses one region: of several, the largest one is kept,
+ * holes filled.
+ */
+function combine(lasso: Point[], other: Point[], operation: Operation): Point[] | null {
+	let result: polygon_clipping.MultiPolygon;
+
+	try {
+		result =
+			operation === "add"
+				? polygon_clipping.union([lasso], [other])
+				: polygon_clipping.difference([lasso], [other]);
+	} catch (error) {
+		console.warn("Lasso tool couldn't combine lassos:", error);
+		return null;
+	}
+
+	const outlines = result.map((polygon) => polygon[0]);
+	if (!outlines.length) return null;
+
+	const largest = outlines.reduce((a, b) => (area(b) > area(a) ? b : a));
+
+	// Rings repeat their first vertex last.
+	return largest.slice(0, -1).map(([x, y]): Point => [x, y]);
+}
+
+/** Shoelace formula. */
+function area(ring: [number, number][]): number {
+	let sum = 0;
+	for (let i = 0; i < ring.length; i++) {
+		const [x1, y1] = ring[i];
+		const [x2, y2] = ring[(i + 1) % ring.length];
+		sum += x1 * y2 - x2 * y1;
+	}
+
+	return Math.abs(sum) / 2;
 }
 
 /** Resolution of an image, once loaded. */

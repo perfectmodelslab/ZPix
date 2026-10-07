@@ -61,6 +61,7 @@ class LassoTool(Component):
         draw_tooltip: str | None = None,
         clear_tooltip: str | None = None,
         marching_ants: bool = True,
+        smoothing: int = 1,
         every: Timer | float | None = None,
         inputs: Component | Sequence[Component] | set[Component] | None = None,
         interactive: bool | None = None,
@@ -78,6 +79,7 @@ class LassoTool(Component):
             draw_tooltip: shown over the image while no lasso is drawn, e.g. to tell user how to draw one.
             clear_tooltip: shown over the image once a lasso is drawn, e.g. to tell user how to clear it.
             marching_ants: if True, the outline of the drawn lasso is animated. If False, it stays still.
+            smoothing: each vertex of the lasso is averaged with this many neighbors on each side, as it is drawn, to smooth the jitter of the hand. If 0, the lasso is kept as drawn.
             every: Continuously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
             inputs: Components that are used as inputs to calculate `value` if `value` is a function (has no effect otherwise). `value` is recalculated any time the inputs change.
             interactive: if False, the lasso can't be drawn or cleared. If not provided, the component is interactive unless it's only used as an event output.
@@ -100,6 +102,7 @@ class LassoTool(Component):
         self.draw_tooltip = draw_tooltip
         self.clear_tooltip = clear_tooltip
         self.marching_ants = marching_ants
+        self.smoothing = smoothing
 
         super().__init__(
             every=every,

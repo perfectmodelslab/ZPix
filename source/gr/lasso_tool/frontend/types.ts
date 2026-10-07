@@ -7,6 +7,7 @@ export interface LassoToolProps {
 	draw_tooltip: string | null;
 	clear_tooltip: string | null;
 	marching_ants: boolean;
+	smoothing: number;
 }
 
 export interface LassoToolEvents {

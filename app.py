@@ -751,7 +751,13 @@ if __name__ == "__main__":
                 lasso = LassoTool(
                     gallery=gallery_images,
                     draw_tooltip=t("Draw a region to enable inpainting"),
-                    clear_tooltip=t("Click to exit inpainting mode"),
+                    clear_tooltip="\n".join(
+                        [
+                            t("Hold Shift to enlarge selection"),
+                            t("Hold Alt to reduce selection"),
+                            t("Click to exit inpainting mode"),
+                        ]
+                    ),
                     interactive=initial_model.supports_inpainting(),
                 )
                 """Region to edit in displayed image."""

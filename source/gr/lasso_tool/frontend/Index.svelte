@@ -106,6 +106,7 @@
 		overlay.toggleAttribute("disabled", gradio.shared.interactive === false);
 		overlay.toggleAttribute("hidden", gradio.shared.visible === false);
 		overlay.toggleAttribute("static", gradio.props.marching_ants === false);
+		overlay.smoothing = gradio.props.smoothing ?? 1;
 		overlay.tooltips = [
 			gradio.props.draw_tooltip ?? "",
 			gradio.props.clear_tooltip ?? ""
