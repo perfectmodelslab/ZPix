@@ -28,6 +28,10 @@ LATENT_CELL = 16
 """Pixels per latent cell, at most: the region regenerated is the cells the
 lasso covers, so it can spill that far out of the lasso."""
 
+INPAINT_MAX_PIXELS: dict[str, int] = {"FLUX.2": 1024 * 1024}
+"""Pixels the inpaint pipeline of a family scales the source image down to, at
+most, whatever size it is asked for."""
+
 FEATHER_RADIUS = 4
 """Blur of the edge the source image is pasted back along, so no seam shows."""
 
@@ -100,18 +104,46 @@ def create_inpaint_pipe(
     return pipeline_class(**{name: pipe.components[name] for name in names}), references
 
 
+def get_inpaint_size(inpaint_source: Image.Image, family: str) -> tuple[int, int]:
+    """Get the size the inpaint pipeline of a family generates at, from the
+    source image: the one to fit memory to, rather than the source image's.
+
+    Floored to whole latent cells, as pipelines refuse or floor other sizes, and
+    scaled down to what the pipeline caps it at, if it does.
+    """
+    width, height = inpaint_source.size
+    max_pixels = INPAINT_MAX_PIXELS.get(family)
+
+    if max_pixels and width * height > max_pixels:
+        scale = (max_pixels / (width * height)) ** 0.5
+        width, height = width * scale, height * scale
+
+    return (
+        max(int(width) // LATENT_CELL, 1) * LATENT_CELL,
+        max(int(height) // LATENT_CELL, 1) * LATENT_CELL,
+    )
+
+
 def get_inpaint_kwargs(
-    inpaint_source: Image.Image, mask: Image.Image, strength: float
+    inpaint_source: Image.Image,
+    mask: Image.Image,
+    strength: float,
+    size: tuple[int, int],
 ) -> dict[str, object]:
     """Get the inpaint pipeline arguments to regenerate the region in mask.
 
-    Model gets the whole image, at its size, so the region fits in it.
+    Model gets the whole image, so the region fits in it, at the size given by
+    get_inpaint_size, so the pipeline generates at the size memory fits.
     """
+    if inpaint_source.size != size:
+        inpaint_source = inpaint_source.resize(size, Image.Resampling.LANCZOS)
+        mask = mask.resize(size, Image.Resampling.LANCZOS)
+
     return {
         "image": inpaint_source,
         "mask_image": mask,
-        "width": inpaint_source.width,
-        "height": inpaint_source.height,
+        "width": size[0],
+        "height": size[1],
         # At 1, region is regenerated from scratch, guided by its context.
         "strength": strength,
     }
@@ -125,6 +157,10 @@ def keep_outside_region(
     The whole image goes through the VAE, so its pixels drift even outside the
     region: pasted back, they match the source image, edit after edit.
     """
+    # Generated at the size given by get_inpaint_size.
+    if image.size != inpaint_source.size:
+        image = image.resize(inpaint_source.size, Image.Resampling.LANCZOS)
+
     region_mask = lasso_to_mask(lasso, inpaint_source.size)
     # Grown past what spilled out of the lasso, so the feather lies where both
     # images only differ by drift. Goes on to the second vertex, else the first

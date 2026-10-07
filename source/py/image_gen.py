@@ -26,6 +26,7 @@ from source.py.ref_images import normalize_ref_image
 from source.py.regional_edits import (
     create_inpaint_pipe,
     get_inpaint_kwargs,
+    get_inpaint_size,
     get_inpaint_source,
     keep_outside_region,
 )
@@ -121,7 +122,7 @@ def generate(
 
     if inpaint_source:
         pipe, inpaint_references = create_inpaint_pipe(pipe, model.family)
-        width, height = inpaint_source.size
+        width, height = get_inpaint_size(inpaint_source, model.family)
         ref_images = []
 
     # Strength-based pipelines (e.g. Anima, Z-Image) condition on a single
@@ -180,7 +181,9 @@ def generate(
 
     if inpaint_source:
         mask = lasso_to_mask(lasso, inpaint_source.size)  # ty: ignore
-        pipe_kwargs.update(get_inpaint_kwargs(inpaint_source, mask, inpaint_strength))
+        pipe_kwargs.update(
+            get_inpaint_kwargs(inpaint_source, mask, inpaint_strength, (width, height))
+        )
 
     with BlockingTask.run(t("Please try again shortly, an image is being generated.")):
         try:
@@ -199,11 +202,12 @@ def generate(
         if inpaint_source and high_res_fix_factor:
 
             def denoise(region: Image.Image, region_mask: Image.Image) -> Image.Image:
+                size = get_inpaint_size(region, model.family)
                 image_pipe.fit_to_resolution(
-                    *region.size, inpaint_references, input_name="inpaint source"
+                    *size, inpaint_references, input_name="inpaint source"
                 )
                 region_kwargs = get_inpaint_kwargs(
-                    region, region_mask, HIGH_RES_FIX_STRENGTH
+                    region, region_mask, HIGH_RES_FIX_STRENGTH, size
                 )
                 region_kwargs["num_inference_steps"] = high_res_fix_steps(int(steps))
                 return pipe(**pipe_kwargs | region_kwargs).images[0]  # ty: ignore
