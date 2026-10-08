@@ -24,7 +24,7 @@
     "Reference Image": "Image de référence",
     "Drag an image here to add it as a reference": "Faites glisser une image ici pour l'ajouter comme référence",
     "Reference Strength": "Force de la référence",
-    "Inpainting Strength": "Force de l'inpainting",
+    "Inpainting Steps": "Étapes d'inpainting",
     "High-Res Fix": "Correction HD",
     "None": "Aucune",
     "{model} supports only one reference image.": "{model} ne prend en charge qu'une seule image de référence.",

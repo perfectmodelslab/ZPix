@@ -7,7 +7,7 @@
         "default": {
             "steps": 8,
             "cfg": 0.0,
-            "inpaint_strength": 0.6
+            "inpaint_strength": 0.625
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -18,7 +18,8 @@
         "family": "FLUX.2",
         "default": {
             "steps": 4,
-            "cfg": 1.0
+            "cfg": 1.0,
+            "inpaint_strength": 1.0
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -29,7 +30,8 @@
         "family": "FLUX.2",
         "default": {
             "steps": 4,
-            "cfg": 1.0
+            "cfg": 1.0,
+            "inpaint_strength": 1.0
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -41,7 +43,7 @@
         "default": {
             "steps": 8,
             "cfg": 1.0,
-            "inpaint_strength": 0.3
+            "inpaint_strength": 0.375
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -65,7 +67,7 @@
         "default": {
             "steps": 8,
             "cfg": 0.0,
-            "inpaint_strength": 0.4
+            "inpaint_strength": 0.5
         },
         "features": ["text-to-image"]
     },
@@ -87,7 +89,8 @@
         "family": "Qwen-Image 2.1",
         "default": {
             "steps": 8,
-            "cfg": 0.0
+            "cfg": 0.0,
+            "inpaint_strength": 0.625
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -98,7 +101,8 @@
         "family": "Qwen-Image 2.1",
         "default": {
             "steps": 40,
-            "cfg": 0.0
+            "cfg": 0.0,
+            "inpaint_strength": 0.6
         },
         "features": ["text-to-image", "image-to-image"]
     }

@@ -46,7 +46,11 @@ from source.py.ref_images import (
     show_ref_image_strength,
     update_ref_images,
 )
-from source.py.regional_edits import sync_ui_to_inpainting_mode
+from source.py.regional_edits import (
+    get_inpaint_steps,
+    sync_inpaint_steps,
+    sync_ui_to_inpainting_mode,
+)
 from source.py.resolutions import get_aspects_and_resolutions
 from source.py.server_close import close_server
 from source.py.translations import get_translate_func
@@ -290,7 +294,7 @@ if __name__ == "__main__":
                         show_progress="hidden",
                     )
 
-                # Hidden in place of inpainting strength when a lasso is drawn.
+                # Hidden in place of inpainting settings when a lasso is drawn.
                 with gr.Column(elem_id="ref-images-column") as ref_images_column:
                     with gr.Row(
                         # A row hidden on startup is not mounted by Gradio,
@@ -342,14 +346,16 @@ if __name__ == "__main__":
 
                 # Shown in place of reference images when a lasso is drawn.
                 with gr.Row(elem_classes=["hidden"]) as inpaint_settings_row:
-                    inpaint_strength = gr.Slider(
+                    inpaint_steps = gr.Slider(
                         scale=3,
-                        label=t("Inpainting Strength"),
-                        # Below, few-step models have no step left to denoise.
-                        minimum=0.3,
-                        maximum=1.0,
-                        step=0.1,
-                        value=initial_model.default.inpaint_strength,
+                        label=t("Inpainting Steps"),
+                        minimum=1,
+                        maximum=initial_model.default.steps,
+                        step=1,
+                        value=get_inpaint_steps(
+                            initial_model.default.inpaint_strength,
+                            initial_model.default.steps,
+                        ),
                     )
                     high_res_fix_factor = gr.Dropdown(
                         scale=1,
@@ -550,6 +556,12 @@ if __name__ == "__main__":
                             value=initial_model.default.steps,
                             step=1,
                         )
+                        steps.change(
+                            sync_inpaint_steps,
+                            inputs=[model, steps],
+                            outputs=inpaint_steps,
+                            show_progress="hidden",
+                        )
 
                 show_adv_params_state = gr.State(value=False)
 
@@ -687,7 +699,7 @@ if __name__ == "__main__":
                         show_ref_image_strength(image_pipe, ref_images),
                         gr.update(value=image_model.default.steps),
                         gr.update(value=image_model.default.cfg),
-                        gr.update(value=image_model.default.inpaint_strength),
+                        sync_inpaint_steps(image_model, image_model.default.steps),
                     ),
                     inputs=[model, reference_images],
                     outputs=[
@@ -696,7 +708,7 @@ if __name__ == "__main__":
                         ref_image_strength_row,
                         steps,
                         cfg,
-                        inpaint_strength,
+                        inpaint_steps,
                     ],
                     show_progress="hidden",
                 ).then(
@@ -993,7 +1005,7 @@ if __name__ == "__main__":
                 output_images_paths,
                 lora_name,
                 lasso,
-                inpaint_strength,
+                inpaint_steps,
                 high_res_fix_factor,
                 selected_image_index,
             ],

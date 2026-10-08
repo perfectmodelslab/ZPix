@@ -28,6 +28,7 @@ from source.py.regional_edits import (
     get_inpaint_kwargs,
     get_inpaint_size,
     get_inpaint_source,
+    get_inpaint_steps,
     keep_outside_region,
 )
 from source.py.resolutions import parse_resolution
@@ -50,7 +51,7 @@ def generate(
     images_paths: dict[str, str],
     lora_name: str | None,
     lasso: list[tuple[int, int]] | None,
-    inpaint_strength: float,
+    inpaint_steps: int,
     high_res_fix_factor: float,
     selected_image_index: int | None,
 ) -> tuple[list[tuple], int, dict[str, str], int]:
@@ -73,7 +74,7 @@ def generate(
         images_paths: Dictionary mapping images IDs to output paths.
         lora_name: Name of loaded LoRA (e.g. "Retro_Anime").
         lasso: Lasso drawn over displayed image around region to edit, if any.
-        inpaint_strength: How much of the region to edit to regenerate.
+        inpaint_steps: Steps to regenerate the region to edit with, out of steps.
         high_res_fix_factor: How much to upscale the region to edit, to denoise
             it a second time, or 0 not to.
         selected_image_index: Index of image displayed in gallery, if any.
@@ -182,7 +183,9 @@ def generate(
     if inpaint_source:
         mask = lasso_to_mask(lasso, inpaint_source.size)  # ty: ignore
         pipe_kwargs.update(
-            get_inpaint_kwargs(inpaint_source, mask, inpaint_strength, (width, height))
+            get_inpaint_kwargs(
+                inpaint_source, mask, (width, height), int(inpaint_steps), int(steps)
+            )
         )
 
     with BlockingTask.run(t("Please try again shortly, an image is being generated.")):
@@ -206,10 +209,15 @@ def generate(
                 image_pipe.fit_to_resolution(
                     *size, inpaint_references, input_name="inpaint source"
                 )
+                region_steps = high_res_fix_steps(int(steps))
                 region_kwargs = get_inpaint_kwargs(
-                    region, region_mask, HIGH_RES_FIX_STRENGTH, size
+                    region,
+                    region_mask,
+                    size,
+                    get_inpaint_steps(HIGH_RES_FIX_STRENGTH, region_steps),
+                    region_steps,
                 )
-                region_kwargs["num_inference_steps"] = high_res_fix_steps(int(steps))
+                region_kwargs["num_inference_steps"] = region_steps
                 return pipe(**pipe_kwargs | region_kwargs).images[0]  # ty: ignore
 
             image = high_res_fix(image, mask, high_res_fix_factor, denoise)

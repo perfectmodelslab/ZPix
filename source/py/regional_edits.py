@@ -1,5 +1,7 @@
 """Regional Edits: regenerate the region of an image drawn with LassoTool."""
 
+from math import ceil
+
 import gradio as gr
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
 from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
@@ -34,6 +36,27 @@ most, whatever size it is asked for."""
 
 FEATHER_RADIUS = 4
 """Blur of the edge the source image is pasted back along, so no seam shows."""
+
+
+def get_inpaint_steps(strength: float, steps: int) -> int:
+    """Get the steps an inpaint pipeline denoises at strength, out of steps:
+    strength of them, rounded up.
+    """
+    # The slack absorbs float error, which can land a hair past a whole step.
+    return min(max(ceil(strength * steps - 1e-6), 1), steps)
+
+
+def sync_inpaint_steps(model: ImageModel, steps: int) -> dict:
+    """Synchronize inpainting steps slider to steps, at model's strength."""
+    steps = int(steps)
+
+    return gr.update(
+        # Gradio refuses a minimum equal to the maximum: with one step, slider
+        # goes down to 0, which denoises one step anyway.
+        minimum=min(1, steps - 1),
+        maximum=steps,
+        value=get_inpaint_steps(model.default.inpaint_strength, steps),
+    )
 
 
 def sync_ui_to_inpainting_mode(
@@ -127,8 +150,9 @@ def get_inpaint_size(inpaint_source: Image.Image, family: str) -> tuple[int, int
 def get_inpaint_kwargs(
     inpaint_source: Image.Image,
     mask: Image.Image,
-    strength: float,
     size: tuple[int, int],
+    inpaint_steps: int,
+    steps: int,
 ) -> dict[str, object]:
     """Get the inpaint pipeline arguments to regenerate the region in mask.
 
@@ -144,8 +168,10 @@ def get_inpaint_kwargs(
         "mask_image": mask,
         "width": size[0],
         "height": size[1],
-        # At 1, region is regenerated from scratch, guided by its context.
-        "strength": strength,
+        # Pipelines denoise strength times steps, rounded up: aim half a step
+        # below inpaint steps, as float error can push exactly them to one more.
+        # At all steps, region is regenerated from scratch, guided by its context.
+        "strength": (max(inpaint_steps, 1) - 0.5) / steps,
     }
 
 
