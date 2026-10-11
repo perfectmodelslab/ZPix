@@ -353,7 +353,7 @@ if __name__ == "__main__":
                         maximum=initial_model.default.steps,
                         step=1,
                         value=get_inpaint_steps(
-                            initial_model.default.inpaint_strength,
+                            initial_model.default.inpaint_strength_ratio,
                             initial_model.default.steps,
                         ),
                     )

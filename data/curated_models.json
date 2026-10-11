@@ -7,7 +7,7 @@
         "default": {
             "steps": 8,
             "cfg": 0.0,
-            "inpaint_strength": 0.625
+            "inpaint_strength_ratio": 0.625
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -19,7 +19,7 @@
         "default": {
             "steps": 4,
             "cfg": 1.0,
-            "inpaint_strength": 1.0
+            "inpaint_strength_ratio": 1.0
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -31,7 +31,7 @@
         "default": {
             "steps": 4,
             "cfg": 1.0,
-            "inpaint_strength": 1.0
+            "inpaint_strength_ratio": 1.0
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -43,7 +43,7 @@
         "default": {
             "steps": 8,
             "cfg": 1.0,
-            "inpaint_strength": 0.375
+            "inpaint_strength_ratio": 0.375
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -55,7 +55,7 @@
         "default": {
             "steps": 30,
             "cfg": 4.0,
-            "inpaint_strength": 0.4
+            "inpaint_strength_ratio": 0.4
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -67,7 +67,7 @@
         "default": {
             "steps": 8,
             "cfg": 0.0,
-            "inpaint_strength": 0.5
+            "inpaint_strength_ratio": 0.5
         },
         "features": ["text-to-image"]
     },
@@ -79,7 +79,7 @@
         "default": {
             "steps": 8,
             "cfg": 1.0,
-            "inpaint_strength": 0.625
+            "inpaint_strength_ratio": 0.625
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -91,7 +91,7 @@
         "default": {
             "steps": 8,
             "cfg": 0.0,
-            "inpaint_strength": 0.625
+            "inpaint_strength_ratio": 0.625
         },
         "features": ["text-to-image", "image-to-image"]
     },
@@ -103,7 +103,7 @@
         "default": {
             "steps": 40,
             "cfg": 0.0,
-            "inpaint_strength": 0.6
+            "inpaint_strength_ratio": 0.6
         },
         "features": ["text-to-image", "image-to-image"]
     }

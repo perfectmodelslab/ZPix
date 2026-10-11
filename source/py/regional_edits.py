@@ -55,7 +55,7 @@ def sync_inpaint_steps(model: ImageModel, steps: int) -> dict:
         # goes down to 0, which denoises one step anyway.
         minimum=min(1, steps - 1),
         maximum=steps,
-        value=get_inpaint_steps(model.default.inpaint_strength, steps),
+        value=get_inpaint_steps(model.default.inpaint_strength_ratio, steps),
     )
 
 
