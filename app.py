@@ -37,7 +37,7 @@ from source.py.lora_models import (
     unload_lora,
     validate_lora_swap,
 )
-from source.py.os_abstract import open_with_default_app
+from source.py.os_abstract import get_key_name, open_with_default_app
 from source.py.output_dir import change_output_dir, get_output_dir
 from source.py.prompt_extract import extract_update_prompt
 from source.py.ref_images import (
@@ -348,7 +348,7 @@ if __name__ == "__main__":
                 with gr.Row(elem_classes=["hidden"]) as inpaint_settings_row:
                     inpaint_steps = gr.Slider(
                         scale=3,
-                        label=t("Inpainting Steps"),
+                        label=t("Inpainting Strength"),
                         minimum=1,
                         maximum=initial_model.default.steps,
                         step=1,
@@ -762,12 +762,13 @@ if __name__ == "__main__":
                 )
                 lasso = LassoTool(
                     gallery=gallery_images,
-                    draw_tooltip=t("Draw a region to enable inpainting"),
+                    draw_tooltip=t("Select an area to inpaint"),
                     clear_tooltip="\n".join(
                         [
-                            t("Hold Shift to enlarge selection"),
-                            t("Hold Alt to reduce selection"),
-                            t("Click to exit inpainting mode"),
+                            t("Hold Shift or {alt} to modify selection").format(
+                                alt=get_key_name("Alt")
+                            ),
+                            t("Click to clear selection"),
                         ]
                     ),
                     interactive=initial_model.supports_inpainting(),
