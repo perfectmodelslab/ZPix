@@ -78,7 +78,8 @@
         "family": "Qwen-Image 2.1",
         "default": {
             "steps": 8,
-            "cfg": 1.0
+            "cfg": 1.0,
+            "inpaint_strength": 0.625
         },
         "features": ["text-to-image", "image-to-image"]
     },
