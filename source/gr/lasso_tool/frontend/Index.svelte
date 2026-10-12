@@ -1,22 +1,27 @@
-<svelte:options accessors={true} />
-
 <script lang="ts">
 	import type { LassoToolProps, LassoToolEvents } from "./types";
+	import { IconButton } from "@gradio/atoms";
 	import { Gradio } from "@gradio/utils";
 	import { onDestroy, onMount } from "svelte";
+	import { find_host, type CanvasHost } from "./canvas_host";
+	import LassoIcon from "./LassoIcon.svelte";
 	import { LassoOverlay, OVERLAY_TAG, type Point } from "./lasso";
 
 	const props = $props();
 	const gradio = new Gradio<LassoToolEvents, LassoToolProps>(props);
 
-	// This component renders nothing in place: its overlay goes
-	// into the gallery, over the displayed (preview) image.
+	// This component renders nothing in place: its overlay goes over the
+	// document displayed by the canvas, and its button in the canvas toolbar.
 	const overlay = document.createElement(OVERLAY_TAG) as LassoOverlay;
+	let button: HTMLElement;
 
 	let old_value: Point[] | null = gradio.props.value ?? null;
 	overlay.value = old_value;
 
-	let observer: MutationObserver | null = null;
+	let host: CanvasHost | null = $state(null);
+	/** Whether user selected this tool in the canvas. */
+	let active = $state(false);
+	let forget_host: (() => void) | null = null;
 
 	function same_lasso(a: Point[] | null, b: Point[] | null): boolean {
 		return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -28,50 +33,31 @@
 		else if (old && !value) gradio.dispatch("cleared");
 	}
 
-	/** Attach overlay to the image displayed by gallery, if any. */
-	function attach(gallery: HTMLElement): void {
-		const image = gallery.querySelector<HTMLImageElement>(
-			'.media-button img[data-testid="detailed-image"]'
-		);
+	function attach(canvas: CanvasHost): void {
+		if (host) return;
 
-		if (!image) {
-			overlay.target = null;
-			overlay.remove();
-			return;
-		}
+		host = canvas;
+		canvas.stage.append(overlay);
+		canvas.add_tool(gradio.shared.id, button);
+		overlay.area = canvas.area;
+		overlay.target = canvas.image;
 
-		const parent = image.parentElement!;
-		if (overlay.parentElement !== parent) parent.append(overlay);
-
-		overlay.area = gallery;
-		overlay.target = image;
+		const update = (): void => {
+			active = canvas.tool === gradio.shared.id;
+		};
+		canvas.addEventListener("tool-change", update);
+		update();
 	}
 
-	/** Watch gallery for displayed image changes, once it's in the DOM. */
-	function watch(): void {
-		const elem_id = gradio.props.gallery_elem_id;
-		const gallery = elem_id ? document.getElementById(elem_id) : null;
-
-		observer?.disconnect();
-
-		if (!gallery) {
-			if (!elem_id) return;
-			observer = new MutationObserver(watch);
-			observer.observe(document.body, { childList: true, subtree: true });
-			return;
-		}
-
-		observer = new MutationObserver(() => attach(gallery));
-		observer.observe(gallery, {
-			childList: true,
-			subtree: true,
-			attributes: true,
-			attributeFilter: ["src"]
-		});
-		attach(gallery);
+	function toggle(): void {
+		if (host) host.tool = active ? null : gradio.shared.id;
 	}
 
 	onMount(() => {
+		// Nothing stays in place, so the Gradio wrapper takes no room in layout,
+		// e.g. no gap in a column.
+		if (button.parentElement) button.parentElement.hidden = true;
+
 		// Not passed back to overlay, which emitted it.
 		overlay.addEventListener("lasso-change", (event) => {
 			const value = (event as CustomEvent<Point[] | null>).detail;
@@ -82,11 +68,12 @@
 			gradio.dispatch("change");
 		});
 
-		watch();
+		const canvas_id = gradio.props.canvas_id;
+		if (canvas_id !== null) forget_host = find_host(canvas_id, attach);
 	});
 
 	onDestroy(() => {
-		observer?.disconnect();
+		forget_host?.();
 		overlay.target = null;
 		overlay.remove();
 	});
@@ -103,7 +90,10 @@
 	});
 
 	$effect(() => {
-		overlay.toggleAttribute("disabled", gradio.shared.interactive === false);
+		overlay.toggleAttribute(
+			"disabled",
+			!active || gradio.shared.interactive === false
+		);
 		overlay.toggleAttribute("hidden", gradio.shared.visible === false);
 		overlay.toggleAttribute("static", gradio.props.marching_ants === false);
 		overlay.smoothing = gradio.props.smoothing ?? 1;
@@ -114,9 +104,17 @@
 	});
 </script>
 
-<style>
-	/* Overlay is positioned against the image parent. */
-	:global(:has(> lasso-tool-overlay)) {
-		position: relative;
-	}
-</style>
+<!-- Moved into the canvas toolbar once attached. -->
+<div
+	bind:this={button}
+	hidden={!host || gradio.shared.visible === false}
+>
+	<IconButton
+		Icon={LassoIcon}
+		label={(active
+			? gradio.props.disable_tooltip
+			: gradio.props.enable_tooltip) ?? ""}
+		disabled={gradio.shared.interactive === false}
+		onclick={toggle}
+	/>
+</div>

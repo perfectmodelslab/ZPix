@@ -9,6 +9,7 @@ from shutil import rmtree
 import gradio as gr
 import torch
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
+from gradio_canvas import CanvasValue
 from gradio_lasso_tool import lasso_to_mask
 from PIL import Image
 
@@ -47,15 +48,13 @@ def generate(
     random_seed: bool,
     steps: int,
     cfg: float,
-    gallery_images: list[tuple] | None,
-    images_paths: dict[str, str],
+    canvas: CanvasValue,
     lora_name: str | None,
     lasso: list[tuple[int, int]] | None,
     inpaint_steps: int,
     high_res_fix_factor: float,
-    selected_image_index: int | None,
-) -> tuple[list[tuple], int, dict[str, str], int]:
-    """Generate an image and possibly a seed, and update gallery.
+) -> tuple[CanvasValue, int]:
+    """Generate an image and possibly a seed, and add it to canvas.
 
     Args:
         image_pipe: Image pipeline holding the loaded model.
@@ -70,16 +69,14 @@ def generate(
         random_seed: Ignore seed argument and generate a seed?
         steps: Number of inference (denoising) steps.
         cfg: Classifier-free guidance scale.
-        gallery_images: Existing gallery images to append to.
-        images_paths: Dictionary mapping images IDs to output paths.
+        canvas: Canvas documents, the generated image is added to.
         lora_name: Name of loaded LoRA (e.g. "Retro_Anime").
-        lasso: Lasso drawn over displayed image around region to edit, if any.
+        lasso: Lasso drawn over displayed document around region to edit, if any.
         inpaint_steps: Steps to regenerate the region to edit with, out of steps.
         high_res_fix_factor: How much to upscale the region to edit, to denoise
             it a second time, or 0 not to.
-        selected_image_index: Index of image displayed in gallery, if any.
     Returns:
-        Tuple of (updated gallery, last image index, output paths, used seed).
+        Tuple of (updated canvas, used seed).
 
     Raises:
         gr.Error
@@ -114,9 +111,7 @@ def generate(
         ref_images = [normalize_ref_image(file) for file in reference_images["files"]]
 
     # Regenerate drawn region of displayed image, at its resolution.
-    inpaint_source = get_inpaint_source(
-        model, lasso, gallery_images, selected_image_index
-    )
+    inpaint_source = get_inpaint_source(model, lasso, canvas.doc)
 
     # References inpaint pipeline appends to the stream, if any.
     inpaint_references = 0
@@ -226,13 +221,7 @@ def generate(
     output_image.embed_settings(model, prompt, used_seed, steps, cfg)
     output_image.save()
 
-    # Output path is recorded for a possible later deletion.
-    images_paths[output_image.id] = str(output_image.path)
+    # Served from output file, whose prompt is shown as caption.
+    canvas.add(Image.open(output_image.path))
 
-    if gallery_images is None:
-        gallery_images = []
-
-    # Prompt is added as image caption.
-    gallery_images.append((output_image.path, prompt))
-
-    return gallery_images, len(gallery_images) - 1, images_paths, used_seed
+    return canvas, used_seed

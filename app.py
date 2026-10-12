@@ -9,6 +9,7 @@ from shutil import rmtree
 
 import gradio as gr
 import torch
+from gradio_canvas import Canvas
 from gradio_lasso_tool import LassoTool
 
 # Force tensorwise FP8 matmul kernels as a fallback on hardware that lacks
@@ -24,7 +25,6 @@ from source.py.custom_errors import BusyPortError
 from source.py.custom_theme import get_theme
 from source.py.disclaimer import TermsOfUse
 from source.py.ex_prompts import get_example_prompts
-from source.py.gallery_images import delete_image
 from source.py.high_res_fix import HIGH_RES_FIX_FACTORS
 from source.py.image_gen import generate
 from source.py.image_models import fetch_model, find_model, get_models
@@ -751,17 +751,9 @@ if __name__ == "__main__":
                 )
 
             with gr.Column(scale=2):
-                gallery_images = gr.Gallery(
-                    label=t("Generated Images"),
-                    object_fit="contain",
-                    format="png",
-                    type="filepath",
-                    buttons=["fullscreen"],
-                    interactive=False,
-                    elem_id="gallery",
-                )
                 lasso = LassoTool(
-                    gallery=gallery_images,
+                    enable_tooltip=t("Enable lasso"),
+                    disable_tooltip=t("Disable lasso"),
                     draw_tooltip=t("Select an area to inpaint"),
                     clear_tooltip="\n".join(
                         [
@@ -773,7 +765,20 @@ if __name__ == "__main__":
                     ),
                     interactive=initial_model.supports_inpainting(),
                 )
-                """Region to edit in displayed image."""
+                """Region to edit in displayed document."""
+
+                canvas = Canvas(
+                    label=t("Canvas"),
+                    show_label=False,
+                    tools=[lasso],
+                    caption_key="prompt",
+                    placeholder=t("Drop an image or generate one with a prompt"),
+                    fullscreen_tooltip=t("Go fullscreen (F)"),
+                    exit_fullscreen_tooltip=t("Exit fullscreen mode (F)"),
+                    height="86vh",
+                    elem_id="canvas",
+                )
+                """Generated and dropped images."""
 
                 # Show inpainting settings in place of reference images, and
                 # hide aspect ratio and resolution, while model inpaints a
@@ -815,85 +820,43 @@ if __name__ == "__main__":
                     show_progress="hidden",
                 )
 
-                output_images_paths = gr.State(value={})
-                """Output images paths indexed by image ID."""
-
-                selected_image_index = gr.State(value=None)
-                """Index of image to select or selected in gallery."""
-
-                def get_selected_image_index(gallery_image: gr.SelectData) -> int:
-                    return gallery_image.index
-
-                gallery_images.select(
-                    get_selected_image_index, outputs=selected_image_index
-                ).success(
+                canvas.change(
                     sync_used_prompt,
-                    inputs=[gallery_images, selected_image_index],
+                    inputs=canvas,
                     outputs=used_prompt,
                     show_progress="hidden",
                 )
 
-                # Prevent grid display.
-                gallery_images.preview_close(
-                    lambda idx: gr.update(selected_index=idx),
-                    inputs=selected_image_index,
-                    outputs=gallery_images,
-                    show_progress="hidden",
-                )
-
                 with gr.Row():
-                    delete_output_image_btn = gr.Button(
-                        t("Delete Image"),
+                    remove_output_image_btn = gr.Button(
+                        t("Remove Image"),
                         visible="hidden",
-                        elem_id="delete-output-image-btn",
-                    )
-                    gr.HTML(
-                        visible="hidden",
-                        js_on_load=f"""
-                            const btn = document.getElementById("delete-output-image-btn")
-                            btn.title = "{t("file included")}"
-                        """,
+                        elem_id="remove-output-image-btn",
                     )
 
-                    # Rapid clicks can cause desync with gallery.
-                    # To prevent this, we disable the button during image deletion.
-                    image_deletion = delete_output_image_btn.click(
-                        lambda: gr.update(interactive=False),
-                        outputs=delete_output_image_btn,
-                    ).then(
-                        delete_image,
-                        inputs=[
-                            gallery_images,
-                            selected_image_index,
-                            output_images_paths,
-                        ],
-                        outputs=[
-                            gallery_images,
-                            selected_image_index,
-                            output_images_paths,
-                        ],
-                    )
-
-                    image_deletion.success(
-                        sync_used_prompt,
-                        inputs=[gallery_images, selected_image_index],
-                        outputs=used_prompt,
+                    remove_output_image_btn.click(
+                        lambda c: c.delete(),
+                        inputs=canvas,
+                        outputs=canvas,
                         show_progress="hidden",
                     )
 
-                    image_deletion.then(
-                        lambda: gr.update(interactive=True),
-                        outputs=delete_output_image_btn,
-                    )
-
-                    # Once gallery is empty, clear lasso: see `lasso.cleared`.
-                    gallery_images.change(
-                        lambda images: (
-                            gr.update(visible=bool(images)),
-                            gr.update() if images else None,
+                    # Once canvas is empty, show example prompts and clear lasso:
+                    # see `lasso.cleared`.
+                    canvas.empty(
+                        lambda: (
+                            gr.update(visible=False),
+                            gr.update(visible=True),
+                            None,
                         ),
-                        inputs=gallery_images,
-                        outputs=[delete_output_image_btn, lasso],
+                        outputs=[remove_output_image_btn, examples_column, lasso],
+                        show_progress="hidden",
+                    )
+                    # Once canvas is filled, hide example prompts.
+                    canvas.filled(
+                        lambda: (gr.update(visible=True), gr.update(visible=False)),
+                        outputs=[remove_output_image_btn, examples_column],
+                        show_progress="hidden",
                     )
 
                     open_output_folder_btn = gr.Button(
@@ -979,14 +942,16 @@ if __name__ == "__main__":
         # If generation was validated:
         # - lock model dropdown,
         # - hide "Used Prompt" a.k.a "Displayed Image Prompt" block,
-        # - hide "Delete Image" button (it's shown later, see gallery_images.change).
+        # - hide "Remove Image" button,
+        # - lock canvas, so generated image doesn't override drops meanwhile.
         ui_setup_for_generation = generation_validated.success(
             lambda: (
                 gr.update(interactive=False),
                 gr.update(visible=False),
                 gr.update(visible=False),
+                gr.update(interactive=False),
             ),
-            outputs=[model_select, used_prompt, delete_output_image_btn],
+            outputs=[model_select, used_prompt, remove_output_image_btn, canvas],
         )
 
         # Once UI is setup: generate image.
@@ -1002,45 +967,21 @@ if __name__ == "__main__":
                 random_seed,
                 steps,
                 cfg,
-                gallery_images,
-                output_images_paths,
+                canvas,
                 lora_name,
                 lasso,
                 inpaint_steps,
                 high_res_fix_factor,
-                selected_image_index,
             ],
-            outputs=[
-                gallery_images,
-                selected_image_index,
-                output_images_paths,
-                seed,
-            ],
-            show_progress_on=gallery_images,
+            outputs=[canvas, seed],
+            show_progress_on=canvas,
         )
 
-        # On generation success:
-        # - release model dropdown,
-        # - select (preview) generated image in gallery,
-        # - sync used prompt,
-        # - make example prompts invisible.
+        # On generation success (canvas displays generated image and syncs used
+        # prompt): release model dropdown.
         generation.success(
             lambda: gr.update(interactive=True),
             outputs=model_select,
-        ).then(
-            lambda idx: gr.update(selected_index=idx),  # See gallery_images.select
-            inputs=selected_image_index,
-            outputs=gallery_images,
-        ).then(
-            # Sync explicitly rather than relying on the gallery .select event.
-            # Reselecting the same index after a deletion wouldn't fire .select.
-            sync_used_prompt,
-            inputs=[gallery_images, selected_image_index],
-            outputs=used_prompt,
-            show_progress="hidden",
-        ).then(
-            lambda: gr.update(visible=False),
-            outputs=examples_column,
         )
 
         # On failed generation: release the model dropdown, unless another
@@ -1048,6 +989,14 @@ if __name__ == "__main__":
         generation.failure(
             lambda: gr.update(interactive=not BlockingTask.is_running),
             outputs=model_select,
+        )
+
+        # Once generation is over: release canvas and "Remove Image" button.
+        generation.then(
+            lambda c: (gr.update(interactive=True), gr.update(visible=not c.is_empty)),
+            inputs=canvas,
+            outputs=[canvas, remove_output_image_btn],
+            show_progress="hidden",
         )
 
         app.load(lambda: ImagePipeline.warn_if_not_optimizable(t))

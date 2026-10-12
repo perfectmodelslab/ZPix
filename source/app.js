@@ -18,9 +18,6 @@ document.addEventListener("mouseleave", (event) => {
     }
 }, true) // Required because mouseleave doesn't bubble.
 
-// Capture phase in case Gradio stops the event on its way up.
-document.addEventListener("dragstart", setGalleryDragData, true)
-
 // Capture phase to decide before Gradio handles the drop.
 document.addEventListener("drop", uploadDroppedImage, true)
 
@@ -54,17 +51,7 @@ function restorePromptTooltip(prompt) {
 }
 
 /**
- * Carry the image URL along a gallery drag. Chrome does it on its own,
- * Firefox starts such a drag with no data at all.
- * @param {DragEvent} event
- */
-function setGalleryDragData(event) {
-    const image = event.target.closest?.("#gallery img")
-    if (image) event.dataTransfer.setData("text/uri-list", image.src)
-}
-
-/**
- * Upload an image dropped from the gallery, to recover its prompt
+ * Upload an image dropped from the canvas, to recover its prompt
  * or to add it as a reference, since Gradio only reads dropped files.
  * @param {DragEvent} event
  */
@@ -84,7 +71,7 @@ async function uploadDroppedImage(event) {
     }
 
     const imageUrl = event.dataTransfer.getData("text/uri-list")
-    // Chrome drops a gallery image as a file, Firefox and LassoTool
+    // Chrome drops a canvas image as a file, Firefox and LassoTool
     // as its URL.
     if (!imageUrl || event.dataTransfer.files.length) return
 

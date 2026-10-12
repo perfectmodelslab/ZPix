@@ -1,0 +1,36 @@
+{
+  "name": "gradio_canvas",
+  "version": "1.0.0",
+  "description": "Gradio canvas displaying documents, with thumbnails and tools",
+  "type": "module",
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "private": false,
+  "exports": {
+    ".": {
+      "gradio": "./Index.svelte",
+      "svelte": "./dist/Index.svelte",
+      "types": "./dist/Index.svelte.d.ts"
+    },
+    "./example": {
+      "gradio": "./Example.svelte",
+      "svelte": "./dist/Example.svelte",
+      "types": "./dist/Example.svelte.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@gradio/atoms": "0.26.0",
+    "@gradio/icons": "0.16.0",
+    "@gradio/statustracker": "0.15.1",
+    "@gradio/utils": "0.13.0",
+    "svelte": "5.48.0"
+  },
+  "devDependencies": {
+    "@gradio/client": "2.4.0",
+    "@gradio/preview": "0.16.2"
+  },
+  "peerDependencies": {
+    "svelte": "5.48.0"
+  }
+}

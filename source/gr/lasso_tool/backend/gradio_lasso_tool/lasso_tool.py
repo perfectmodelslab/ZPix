@@ -12,11 +12,11 @@ from PIL import Image, ImageDraw
 
 if TYPE_CHECKING:
     from gradio.blocks import Block
-    from gradio.components import Gallery, Timer
+    from gradio.components import Timer
 
 
 class Lasso(GradioRootModel):
-    """Lasso vertices in pixels of the original image."""
+    """Lasso vertices in pixels of the base layer image."""
 
     root: list[tuple[int, int]]
 
@@ -40,8 +40,8 @@ def lasso_to_mask(points: list[tuple[int, int]], size: tuple[int, int]) -> Image
 
 class LassoTool(Component):
     """
-    Lets user draw a freehand lasso over the image displayed by a gallery,
-    e.g. to mask a region to edit.
+    Lets user draw a freehand lasso over the document displayed by a canvas,
+    which hosts this tool, e.g. to mask a region to edit.
     """
 
     EVENTS = [  # noqa: RUF012 (Gradio API)
@@ -57,7 +57,8 @@ class LassoTool(Component):
         self,
         value: list[tuple[int, int]] | Callable | None = None,
         *,
-        gallery: Gallery | None = None,
+        enable_tooltip: str | None = None,
+        disable_tooltip: str | None = None,
         draw_tooltip: str | None = None,
         clear_tooltip: str | None = None,
         marching_ants: bool = True,
@@ -74,8 +75,9 @@ class LassoTool(Component):
     ):
         """
         Parameters:
-            value: default lasso, as a list of `(x, y)` vertices in pixels of the original image. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
-            gallery: the gallery whose displayed (preview) image the lasso is drawn over. If it has no `elem_id`, one is assigned to find it in the DOM.
+            value: default lasso, as a list of `(x, y)` vertices in pixels of the base layer image. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
+            enable_tooltip: tooltip of the tool button, in the canvas toolbar, while this tool isn't selected.
+            disable_tooltip: tooltip of the tool button, in the canvas toolbar, while this tool is selected.
             draw_tooltip: shown over the image while no lasso is drawn, e.g. to tell user how to draw one.
             clear_tooltip: shown over the image once a lasso is drawn, e.g. to tell user how to clear it.
             marching_ants: if True, the outline of the drawn lasso is animated. If False, it stays still.
@@ -90,15 +92,11 @@ class LassoTool(Component):
             key: in a gr.render, Components with the same key across re-renders are treated as the same component, not a new component. Properties set in 'preserved_by_key' are not reset across a re-render.
             preserved_by_key: A list of parameters from this component's constructor. Inside a gr.render() function, if a component is re-rendered with the same key, these (and only these) parameters will be preserved in the UI (if they have been changed by the user or an event listener) instead of re-rendered based on the values provided during constructor.
         """
-        # Only the gallery DOM id goes to frontend, since Gradio would
-        # otherwise serialize the whole gallery config (value included).
-        self.gallery_elem_id = None
+        # Set by the canvas hosting this tool, e.g. Canvas(tools=[lasso]).
+        self.canvas_id: int | None = None
 
-        if gallery is not None:
-            if not gallery.elem_id:
-                gallery.elem_id = f"gallery-{gallery._id}"
-            self.gallery_elem_id = gallery.elem_id
-
+        self.enable_tooltip = enable_tooltip
+        self.disable_tooltip = disable_tooltip
         self.draw_tooltip = draw_tooltip
         self.clear_tooltip = clear_tooltip
         self.marching_ants = marching_ants
@@ -121,7 +119,7 @@ class LassoTool(Component):
 
     def get_config(self, cls: type[Block] | None = None) -> dict[str, Any]:
         config = super().get_config(cls)
-        config["gallery_elem_id"] = self.gallery_elem_id
+        config["canvas_id"] = self.canvas_id
         return config
 
     def preprocess(self, payload: Lasso | None) -> list[tuple[int, int]] | None:
@@ -129,14 +127,14 @@ class LassoTool(Component):
         Parameters:
             payload: the lasso drawn by user, if any.
         Returns:
-            Passes lasso as a {list} of `(x, y)` vertices (pixels of the original image), or None if there is no lasso.
+            Passes lasso as a {list} of `(x, y)` vertices (pixels of the base layer image), or None if there is no lasso.
         """
         return None if payload is None else payload.root
 
     def postprocess(self, value: list[tuple[int, int]] | None) -> Lasso | None:
         """
         Parameters:
-            value: Expects a {list} of `(x, y)` vertices (pixels of the original image), or None to clear the lasso.
+            value: Expects a {list} of `(x, y)` vertices (pixels of the base layer image), or None to clear the lasso.
         Returns:
             The lasso to display.
         """

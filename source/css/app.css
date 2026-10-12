@@ -44,6 +44,10 @@ textarea:focus-visible {
     outline: none !important;
 }
 
+.app {
+    padding: var(--size-4) var(--size-4) !important;
+}
+
 #tou-card {
     max-width: 360px;
     padding: 1rem;
@@ -156,37 +160,7 @@ textarea:focus-visible {
     scrollbar-color: var(--border-color-primary) transparent;
 }
 
-#gallery {
-    height: 82vh;
-}
-
-#gallery .icon-button:nth-child(2) {
-    display: none; /* Hide "Close" preview button */
-}
-
-#gallery .caption {
-    display: none; /* Caption remains visible as tooltip */
-}
-
-#gallery .thumbnails {
-    bottom: 1.2vh;
-    height: auto;
-}
-
-#gallery .thumbnail-item {
-    border: none;
-    box-shadow: unset;
-    transform: unset;
-    width: var(--size-16);
-    height: var(--size-16);
-}
-
-#gallery .thumbnail-item:focus {
-    outline: 2px solid var(--body-text-color) !important;
-    outline-offset: -2px; /* Flush with edges, follow corners */
-}
-
-#delete-output-image-btn {
+#remove-output-image-btn {
     max-width: 33%;
     margin-right: auto;
 }
@@ -194,6 +168,10 @@ textarea:focus-visible {
 #open-output-folder-btn {
     max-width: 33%;
     margin-left: auto;
+}
+
+footer {
+    display: none !important;
 }
 
 footer a:hover {

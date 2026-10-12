@@ -3,7 +3,9 @@ import type { Point } from "./lasso";
 
 export interface LassoToolProps {
 	value: Point[] | null;
-	gallery_elem_id: string | null;
+	canvas_id: number | null;
+	enable_tooltip: string | null;
+	disable_tooltip: string | null;
 	draw_tooltip: string | null;
 	clear_tooltip: string | null;
 	marching_ants: boolean;

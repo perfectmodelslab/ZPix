@@ -9,11 +9,13 @@ from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
 )
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.z_image.pipeline_z_image_inpaint import ZImageInpaintPipeline
+from gradio_canvas import Doc
 from gradio_lasso_tool import lasso_to_mask
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from source.py.anima_inpaint import create_anima_inpaint_pipe
 from source.py.image_model import ImageModel
+from source.py.image_utilities import to_rgb
 from source.py.krea2_inpaint import create_krea2_inpaint_pipe
 from source.py.qwen21_inpaint import create_qwen21_inpaint_pipe
 
@@ -82,22 +84,15 @@ def sync_ui_to_inpainting_mode(
 def get_inpaint_source(
     model: ImageModel,
     lasso: list[tuple[int, int]] | None,
-    gallery_images: list[tuple] | None,
-    selected_image_index: int | None,
+    doc: Doc | None,
 ) -> Image.Image | None:
-    """Get the image displayed in gallery, if user drew a region to edit there
-    and model can inpaint it."""
-    if (
-        not lasso
-        or not model.supports_inpainting()
-        or not gallery_images
-        or selected_image_index is None
-    ):
+    """Get the image of the document displayed in canvas, if user drew a region
+    to edit there and model can inpaint it."""
+    if not lasso or not model.supports_inpainting() or doc is None:
         return None
 
-    image_path, _caption = gallery_images[selected_image_index]
-
-    return Image.open(image_path).convert("RGB")
+    # Upright, as browser displays it, e.g. a photo dropped onto the canvas.
+    return to_rgb(ImageOps.exif_transpose(doc.image))
 
 
 def create_inpaint_pipe(

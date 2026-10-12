@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gradio_canvas"
+version = "1.0.0"
+description = "Gradio canvas displaying documents, with thumbnails and tools"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.14"
+# Required by Gradio to detect a custom component.
+keywords = ["gradio-custom-component"]
+dependencies = ["gradio>=6.0,<7.0"]
+
+[tool.hatch.build]
+artifacts = ["/backend/gradio_canvas/templates", "*.pyi"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["/backend/gradio_canvas"]
+
+[tool.ruff]
+extend-exclude = ["*.pyi"]
+
+[tool.ty.src]
+exclude = ["*.pyi"]

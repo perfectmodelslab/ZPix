@@ -145,7 +145,7 @@ export class LassoOverlay extends HTMLElement {
 	#emitted = "null";
 
 	/**
-	 * Element lasso is drawn within, e.g. the gallery: a drawing leaving it
+	 * Element lasso is drawn within, e.g. the canvas: a drawing leaving it
 	 * is in fact a drag of image to another element.
 	 */
 	area: HTMLElement | null = null;
@@ -223,10 +223,6 @@ export class LassoOverlay extends HTMLElement {
 		this.addEventListener("pointermove", (e) => this.#on_pointermove(e));
 		this.addEventListener("pointerup", () => this.#on_pointerup());
 		this.addEventListener("pointercancel", () => this.#on_pointercancel());
-
-		// The overlay sits in the gallery preview button, whose click
-		// shows the previous or next image: don't let our clicks reach it.
-		this.addEventListener("click", (e) => e.stopPropagation());
 	}
 
 	/**
@@ -442,8 +438,8 @@ export class LassoOverlay extends HTMLElement {
 	 * A click clears the lasso, and a drag draws a new one, which replaces
 	 * the current one at once and closes on release, or adds to it with Shift
 	 * held, or subtracts from it with Alt held. User may as well drag displayed
-	 * image to another element, e.g. a prompt left of the gallery: leaving the
-	 * area (gallery) turns the drawing into a drop.
+	 * image to another element, e.g. a prompt left of the canvas: leaving the
+	 * area (canvas) turns the drawing into a drop.
 	 */
 	#on_pointerdown(event: PointerEvent): void {
 		if (!this.#target || event.button !== 0) return;
@@ -464,7 +460,7 @@ export class LassoOverlay extends HTMLElement {
 		this.#update_cursor();
 
 		this.setPointerCapture(event.pointerId);
-		// Captured before the gallery, which leaves preview on Escape.
+		// Captured before others, e.g. the canvas, which leaves fullscreen on Escape.
 		window.addEventListener("keydown", this.#on_keydown, true);
 	}
 

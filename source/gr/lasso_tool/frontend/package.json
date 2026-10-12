@@ -1,7 +1,7 @@
 {
   "name": "gradio_lasso_tool",
-  "version": "1.0.0",
-  "description": "Freehand lasso drawn over a Gradio gallery image",
+  "version": "2.0.0",
+  "description": "Freehand lasso drawn over a Gradio canvas document",
   "type": "module",
   "author": "",
   "license": "GPL-3.0-or-later",

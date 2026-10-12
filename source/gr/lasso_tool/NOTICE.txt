@@ -1,7 +1,7 @@
 Gradio Lasso Tool includes the following third-party software.
 
 ================================================================================
-Lucide (https://lucide.dev), lasso icon used as the cursor
+Lucide (https://lucide.dev), lasso icon used as the cursor and tool icon
 ISC License
 ================================================================================
 
