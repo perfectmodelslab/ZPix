@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gradio_lasso_tool"
-version = "2.0.0"
+version = "1.0.0"
 description = "Freehand lasso drawn over a Gradio canvas document"
 license = "GPL-3.0-or-later"
 # Third-party notices, as their licenses require, since the frontend bundles
