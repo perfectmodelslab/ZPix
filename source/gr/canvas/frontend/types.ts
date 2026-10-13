@@ -23,7 +23,6 @@ export interface CanvasProps {
 	buttons: "fullscreen"[];
 	fullscreen_tooltip: string;
 	exit_fullscreen_tooltip: string;
-	thumbs: boolean;
 	placeholder: string | null;
 	height: number | string | null;
 }

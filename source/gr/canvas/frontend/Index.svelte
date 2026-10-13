@@ -368,7 +368,7 @@
 			</div>
 		{/if}
 
-		{#if gradio.props.thumbs && value.docs.length}
+		{#if value.docs.length}
 			<!-- Arrows on hover, for mouse users: keys already step. -->
 			<div class="thumbs-bar" onwheel={on_thumbs_wheel}>
 				<button

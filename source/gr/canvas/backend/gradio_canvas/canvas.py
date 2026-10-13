@@ -209,7 +209,6 @@ class Canvas(Component):
         buttons: Sequence[Literal["fullscreen"]] = ("fullscreen",),
         fullscreen_tooltip: str = "Go fullscreen (F)",
         exit_fullscreen_tooltip: str = "Exit fullscreen mode (F)",
-        thumbs: bool = True,
         caption_key: str | None = None,
         placeholder: str | None = None,
         label: str | None = None,
@@ -235,7 +234,6 @@ class Canvas(Component):
             buttons: buttons shown at the top left of the canvas. "fullscreen" toggles fullscreen, as does the F key.
             fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas isn't fullscreen.
             exit_fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas is fullscreen.
-            thumbs: if True, thumbnails of documents are shown below the displayed one.
             caption_key: if provided, the text of the base layer image info (e.g. a PNG text chunk) at this key is shown as tooltip of the document thumbnail.
             placeholder: text shown in the canvas while it has no document, e.g. to tell user how to add one.
             label: the label for this component, displayed at the top left of the canvas.
@@ -258,7 +256,6 @@ class Canvas(Component):
         self.buttons = list(buttons)
         self.fullscreen_tooltip = fullscreen_tooltip
         self.exit_fullscreen_tooltip = exit_fullscreen_tooltip
-        self.thumbs = thumbs
         self.caption_key = caption_key
         self.placeholder = placeholder
         self.height = height
