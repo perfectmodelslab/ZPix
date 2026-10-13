@@ -54,6 +54,20 @@ void Webview::Initialize(HWND parent, const std::wstring& url) {
                             Resize(bounds);
 
                             if (webviewWindow) {
+                                webviewWindow->add_WebMessageReceived(
+                                    Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                                        [this, parent](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                            LPWSTR message = nullptr;
+                                            if (SUCCEEDED(args->TryGetWebMessageAsString(&message))) {
+                                                if (wcscmp(message, L"getWindowFocus") == 0) {
+                                                    TakeFocus(parent);
+                                                }
+                                                CoTaskMemFree(message);
+                                            }
+                                            return S_OK;
+                                        }).Get(),
+                                    nullptr);
+
                                 webviewWindow->Navigate(url.c_str());
                             }
 
@@ -66,6 +80,20 @@ void Webview::Initialize(HWND parent, const std::wstring& url) {
 void Webview::Resize(const RECT& bounds) {
     if (webviewController) {
         webviewController->put_Bounds(bounds);
+    }
+}
+
+void Webview::TakeFocus(HWND hwnd) {
+    HWND foreground = GetForegroundWindow();
+    if (foreground != hwnd) {
+        DWORD foregroundThread = GetWindowThreadProcessId(foreground, nullptr);
+        DWORD thisThread = GetCurrentThreadId();
+        AttachThreadInput(thisThread, foregroundThread, TRUE);
+        SetForegroundWindow(hwnd);
+        AttachThreadInput(thisThread, foregroundThread, FALSE);
+    }
+    if (webviewController) {
+        webviewController->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
     }
 }
 

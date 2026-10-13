@@ -21,6 +21,12 @@ document.addEventListener("mouseleave", (event) => {
 // Capture phase to decide before Gradio handles the drop.
 document.addEventListener("drop", uploadDroppedImage, true)
 
+// On Windows, a file drop leaves focus to the file explorer:
+// ZPix launcher takes it back. Capture as the above can stop it.
+document.addEventListener("drop", () => {
+    window.chrome?.webview?.postMessage("getWindowFocus")
+}, true)
+
 // A refresh can close the server (see app.unload)
 // or disturb the app state.
 if (performance.getEntriesByType("navigation")[0]?.type === "reload") {

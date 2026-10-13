@@ -24,6 +24,8 @@ public:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 private:
+    void TakeFocus(HWND hwnd);
+
     ComPtr<ICoreWebView2Controller> webviewController;
     ComPtr<ICoreWebView2> webviewWindow;
 };
