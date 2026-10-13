@@ -46,7 +46,7 @@
     "Drop an image or generate one with a prompt": "Déposez une image ici ou générez-en une avec un prompt",
     "Go fullscreen (F)": "Passer en plein écran (F)",
     "Exit fullscreen mode (F)": "Quitter le plein écran (F)",
-    "Enable lasso": "Activer le lasso",
+    "Enable lasso (L)": "Activer le lasso (L)",
     "Disable lasso": "Désactiver le lasso",
     "Select an area to inpaint": "Sélectionnez une zone à retoucher",
     "Hold Shift or {alt} to modify selection": "Maintenez Maj ou {alt} pour modifier la sélection",

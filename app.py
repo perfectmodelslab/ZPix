@@ -753,7 +753,7 @@ if __name__ == "__main__":
 
             with gr.Column(scale=2):
                 lasso = LassoTool(
-                    enable_tooltip=t("Enable lasso"),
+                    enable_tooltip=t("Enable lasso (L)"),
                     disable_tooltip=t("Disable lasso"),
                     draw_tooltip=t("Select an area to inpaint"),
                     clear_tooltip="\n".join(

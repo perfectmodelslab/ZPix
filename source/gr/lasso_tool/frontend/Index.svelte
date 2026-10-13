@@ -53,6 +53,37 @@
 		if (host) host.tool = active ? null : gradio.shared.id;
 	}
 
+	function is_text_field(target: EventTarget | null): boolean {
+		return (
+			target instanceof HTMLElement &&
+			(target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+		);
+	}
+
+	/**
+	 * L selects this tool, unless user types text with pointer away from the
+	 * canvas area. Only its button deselects it.
+	 */
+	function on_keydown(event: KeyboardEvent): void {
+		if (
+			!host ||
+			active ||
+			gradio.shared.visible === false ||
+			gradio.shared.interactive === false ||
+			event.key.toLowerCase() !== "l" ||
+			event.defaultPrevented ||
+			event.altKey ||
+			event.ctrlKey ||
+			event.metaKey ||
+			(is_text_field(event.target) && !host.area.matches(":hover"))
+		) {
+			return;
+		}
+
+		event.preventDefault();
+		host.tool = gradio.shared.id;
+	}
+
 	onMount(() => {
 		// Nothing stays in place, so the Gradio wrapper takes no room in layout,
 		// e.g. no gap in a column.
@@ -103,6 +134,8 @@
 		];
 	});
 </script>
+
+<svelte:window onkeydown={on_keydown} />
 
 <!-- Moved into the canvas toolbar once attached. -->
 <div

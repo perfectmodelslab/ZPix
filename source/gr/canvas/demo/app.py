@@ -19,7 +19,7 @@ def log(line: str) -> str:
 
 with gr.Blocks(analytics_enabled=False) as demo:
     lasso = LassoTool(
-        enable_tooltip="Enable lasso",
+        enable_tooltip="Enable lasso (L)",
         disable_tooltip="Disable lasso",
         draw_tooltip="Drag to draw a lasso",
     )

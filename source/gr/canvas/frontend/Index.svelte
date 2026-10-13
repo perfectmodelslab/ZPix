@@ -417,11 +417,15 @@
 			</div>
 		{/if}
 
-		<!-- Actions, then tools in a column below. -->
+		<!-- Actions, then tools in a column below. A click keeps focus where it
+		     was, e.g. in a prompt: else a shortcut pressed later, e.g. F, shows
+		     the focus ring on the button. -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="buttons"
 			class:below-label={gradio.shared.show_label}
 			bind:offsetWidth={buttons_width}
+			onmousedown={(event) => event.preventDefault()}
 		>
 			{#if gradio.props.buttons?.includes("fullscreen")}
 				<div class="group">

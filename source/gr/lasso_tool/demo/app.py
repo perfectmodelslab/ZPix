@@ -9,7 +9,7 @@ image = Image.new("RGB", (1200, 800), "steelblue")
 
 with gr.Blocks(analytics_enabled=False) as demo:
     lasso = LassoTool(
-        enable_tooltip="Enable lasso",
+        enable_tooltip="Enable lasso (L)",
         disable_tooltip="Disable lasso",
         draw_tooltip="Drag to draw a lasso",
         clear_tooltip="Hold Shift to enlarge selection\nHold Alt to reduce selection\nClick to clear the lasso",

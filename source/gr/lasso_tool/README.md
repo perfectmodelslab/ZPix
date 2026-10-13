@@ -7,7 +7,7 @@ from gradio_canvas import Canvas
 from gradio_lasso_tool import LassoTool, lasso_to_mask
 
 lasso = LassoTool(
-    enable_tooltip="Enable lasso",
+    enable_tooltip="Enable lasso (L)",
     disable_tooltip="Disable lasso",
     draw_tooltip="...",
     clear_tooltip="...",
@@ -20,7 +20,7 @@ mask = lasso_to_mask(points, image.size)
 
 Value is a list of `(x, y)` vertices in pixels of the base layer image, or `None` when no lasso is drawn.
 
-The lasso button, with `enable_tooltip` as tooltip (`disable_tooltip` while selected), goes to the canvas toolbar. User draws only while the tool is selected there, and `interactive` is not False.
+The lasso button, with `enable_tooltip` as tooltip (`disable_tooltip` while selected), goes to the canvas toolbar. The L key selects it too, but only the button deselects it. User draws only while the tool is selected there, and `interactive` is not False.
 
 The lasso persists when the canvas displays another document, scaled to its resolution if it differs.
 
