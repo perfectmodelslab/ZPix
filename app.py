@@ -26,6 +26,7 @@ from source.py.custom_theme import get_theme
 from source.py.disclaimer import TermsOfUse
 from source.py.ex_prompts import get_example_prompts
 from source.py.high_res_fix import HIGH_RES_FIX_FACTORS
+from source.py.image_discard import discard_image
 from source.py.image_gen import generate
 from source.py.image_models import fetch_model, find_model, get_models
 from source.py.image_pipe import ImagePipeline
@@ -828,14 +829,14 @@ if __name__ == "__main__":
                 )
 
                 with gr.Row():
-                    remove_output_image_btn = gr.Button(
-                        t("Remove Image"),
+                    discard_image_btn = gr.Button(
+                        t("Discard Image"),
                         visible="hidden",
-                        elem_id="remove-output-image-btn",
+                        elem_id="discard-image-btn",
                     )
 
-                    remove_output_image_btn.click(
-                        lambda c: c.delete(),
+                    discard_image_btn.click(
+                        partial(discard_image, output_dir, t),
                         inputs=canvas,
                         outputs=canvas,
                         show_progress="hidden",
@@ -849,13 +850,13 @@ if __name__ == "__main__":
                             gr.update(visible=True),
                             None,
                         ),
-                        outputs=[remove_output_image_btn, examples_column, lasso],
+                        outputs=[discard_image_btn, examples_column, lasso],
                         show_progress="hidden",
                     )
                     # Once canvas is filled, hide example prompts.
                     canvas.filled(
                         lambda: (gr.update(visible=True), gr.update(visible=False)),
-                        outputs=[remove_output_image_btn, examples_column],
+                        outputs=[discard_image_btn, examples_column],
                         show_progress="hidden",
                     )
 
@@ -942,7 +943,7 @@ if __name__ == "__main__":
         # If generation was validated:
         # - lock model dropdown,
         # - hide "Used Prompt" a.k.a "Displayed Image Prompt" block,
-        # - hide "Remove Image" button,
+        # - hide "Discard Image" button,
         # - lock canvas, so generated image doesn't override drops meanwhile.
         ui_setup_for_generation = generation_validated.success(
             lambda: (
@@ -951,7 +952,7 @@ if __name__ == "__main__":
                 gr.update(visible=False),
                 gr.update(interactive=False),
             ),
-            outputs=[model_select, used_prompt, remove_output_image_btn, canvas],
+            outputs=[model_select, used_prompt, discard_image_btn, canvas],
         )
 
         # Once UI is setup: generate image.
@@ -991,11 +992,11 @@ if __name__ == "__main__":
             outputs=model_select,
         )
 
-        # Once generation is over: release canvas and "Remove Image" button.
+        # Once generation is over: release canvas and "Discard Image" button.
         generation.then(
             lambda c: (gr.update(interactive=True), gr.update(visible=not c.is_empty)),
             inputs=canvas,
-            outputs=[canvas, remove_output_image_btn],
+            outputs=[canvas, discard_image_btn],
             show_progress="hidden",
         )
 

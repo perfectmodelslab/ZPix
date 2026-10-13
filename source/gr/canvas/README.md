@@ -19,7 +19,7 @@ canvas.doc_deleted(lambda e: print(f"Deleted {e.path}"), None, None)
 
 ## Value
 
-A document (`Doc`) is a stack of layers (`Layer`), from the base one up. For now, a layer object is a PIL image, served from its file if opened from one (e.g. with `Image.open`), else saved to the Gradio cache as PNG.
+A document (`Doc`) is a stack of layers (`Layer`), from the base one up. For now, a layer object is a PIL image, served from its file if opened from one (e.g. with `Image.open`), else saved to the Gradio cache as PNG. A layer is `imported` if it comes from outside the session, e.g. an image user dropped onto the canvas, wherever from, rather than from the app, e.g. generated (default). Its `source_file` is the file its object comes from, if any, e.g. to move it later, since canvas serves a copy of this file. Canvas keeps it as is: `None` for a dropped image.
 
 Listeners get a `CanvasValue`, holding the documents (`docs`) and the index of the displayed one (`index`, `None` only if there is none). Each layer object is an image opened (lazily) from its file in the Gradio cache, so its PNG text chunks are in its `info`. Listeners may return a `CanvasValue`, or a list of documents or images, the last one displayed.
 

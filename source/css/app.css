@@ -160,7 +160,7 @@ textarea:focus-visible {
     scrollbar-color: var(--border-color-primary) transparent;
 }
 
-#remove-output-image-btn {
+#discard-image-btn {
     max-width: 33%;
     margin-right: auto;
 }

@@ -3,6 +3,8 @@ import type { ILoadingStatus as LoadingStatus } from "@gradio/statustracker";
 
 export interface LayerData {
 	object: FileData;
+	imported: boolean;
+	source_file: string | null;
 }
 
 export interface DocData {
@@ -12,7 +14,6 @@ export interface DocData {
 
 export interface CanvasData {
 	docs: DocData[];
-	/** Index of the displayed document, null only if there is none. */
 	index: number | null;
 }
 
@@ -29,7 +30,6 @@ export interface CanvasProps {
 
 export interface DocEventData {
 	index: number;
-	/** Path of the base layer file. */
 	path: string;
 }
 

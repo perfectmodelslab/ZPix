@@ -25,6 +25,14 @@ class Layer:
     object: Image.Image
     """Served from its file if opened from one, e.g. with `Image.open`."""
 
+    imported: bool = False
+    """Whether it comes from outside the session, e.g. a dropped file,
+    rather than from the app, e.g. generated."""
+
+    source_file: Path | None = None
+    """File the object comes from, if any, e.g. to move it later, since
+    canvas serves a copy of this file. Kept as is by canvas."""
+
 
 @dataclass
 class Doc:
@@ -124,6 +132,8 @@ class CanvasValue:
 
 class LayerData(GradioModel):
     object: FileData
+    imported: bool = False
+    source_file: str | None = None
 
 
 class DocData(GradioModel):
@@ -294,7 +304,16 @@ class Canvas(Component):
             return CanvasValue()
 
         docs = [
-            Doc([Layer(Image.open(layer.object.path)) for layer in doc.layers])
+            Doc(
+                [
+                    Layer(
+                        Image.open(layer.object.path),
+                        layer.imported,
+                        Path(layer.source_file) if layer.source_file else None,
+                    )
+                    for layer in doc.layers
+                ]
+            )
             for doc in payload.docs
         ]
 
@@ -317,7 +336,13 @@ class Canvas(Component):
             docs=[
                 DocData(
                     layers=[
-                        LayerData(object=self._file(layer.object))
+                        LayerData(
+                            object=self._file(layer.object),
+                            imported=layer.imported,
+                            source_file=str(layer.source_file)
+                            if layer.source_file
+                            else None,
+                        )
                         for layer in doc.layers
                     ],
                     caption=self._caption(doc.image),

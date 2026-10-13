@@ -9,7 +9,7 @@ from shutil import rmtree
 import gradio as gr
 import torch
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
-from gradio_canvas import CanvasValue
+from gradio_canvas import CanvasValue, Doc, Layer
 from gradio_lasso_tool import lasso_to_mask
 from PIL import Image
 
@@ -222,6 +222,8 @@ def generate(
     output_image.save()
 
     # Served from output file, whose prompt is shown as caption.
-    canvas.add(Image.open(output_image.path))
+    canvas.add(
+        Doc([Layer(Image.open(output_image.path), source_file=output_image.path)])
+    )
 
     return canvas, used_seed

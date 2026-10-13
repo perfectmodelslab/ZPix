@@ -260,7 +260,12 @@
 
 		const added = (uploaded ?? [])
 			.filter((object) => object !== null)
-			.map((object): DocData => ({ layers: [{ object }], caption: null }));
+			.map(
+				(object): DocData => ({
+					layers: [{ object, imported: true, source_file: null }],
+					caption: null
+				})
+			);
 		if (!added.length) return;
 
 		const first = value.docs.length;
