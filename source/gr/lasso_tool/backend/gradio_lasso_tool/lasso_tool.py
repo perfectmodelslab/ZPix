@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from gradio.components.base import Component
 from gradio.data_classes import GradioRootModel
 from gradio.events import Events
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 if TYPE_CHECKING:
     from gradio.blocks import Block
@@ -16,26 +16,37 @@ if TYPE_CHECKING:
 
 
 class Lasso(GradioRootModel):
-    """Lasso vertices in pixels of the base layer image."""
+    """Lasso outlines, each a list of vertices in pixels of the base layer image.
 
-    root: list[tuple[int, int]]
+    A point is selected if it lies inside an odd number of outlines, so an
+    outline inside another one is a hole.
+    """
+
+    root: list[list[tuple[int, int]]]
 
 
-def lasso_to_mask(points: list[tuple[int, int]], size: tuple[int, int]) -> Image.Image:
-    """Make the mask of a lasso, e.g. to inpaint its region.
+def lasso_to_mask(
+    outlines: list[list[tuple[int, int]]], size: tuple[int, int]
+) -> Image.Image:
+    """Make the mask of a lasso, e.g. to inpaint its regions.
 
     Args:
-        points: Lasso vertices, as LassoTool passes them.
+        outlines: Lasso outlines, as LassoTool passes them.
         size: Width and height of the image to mask.
 
     Returns:
         Grayscale image, white inside the lasso and black outside.
     """
-    mask = Image.new("L", size, 0)
-    # Closes the lasso from its last vertex to its first, as drawn.
-    ImageDraw.Draw(mask).polygon(points, fill=255)
+    mask = Image.new("1", size, 0)
 
-    return mask
+    for outline in outlines:
+        outline_mask = Image.new("1", size, 0)
+        # Closes the outline from its last vertex to its first, as drawn.
+        ImageDraw.Draw(outline_mask).polygon(outline, fill=1)
+        # Selected inside an odd number of outlines.
+        mask = ImageChops.logical_xor(mask, outline_mask)
+
+    return mask.convert("L")
 
 
 class LassoTool(Component):
@@ -55,7 +66,7 @@ class LassoTool(Component):
 
     def __init__(
         self,
-        value: list[tuple[int, int]] | Callable | None = None,
+        value: list[list[tuple[int, int]]] | Callable | None = None,
         *,
         enable_tooltip: str | None = None,
         disable_tooltip: str | None = None,
@@ -75,11 +86,11 @@ class LassoTool(Component):
     ):
         """
         Parameters:
-            value: default lasso, as a list of `(x, y)` vertices in pixels of the base layer image. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
+            value: default lasso, as a list of outlines, each a list of `(x, y)` vertices in pixels of the base layer image. A point is selected if it lies inside an odd number of outlines, so an outline inside another one is a hole. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
             enable_tooltip: tooltip of the tool button, in the canvas toolbar, while this tool isn't selected.
             disable_tooltip: tooltip of the tool button, in the canvas toolbar, while this tool is selected.
             draw_tooltip: shown over the image while no lasso is drawn, e.g. to tell user how to draw one.
-            clear_tooltip: shown over the image once a lasso is drawn, e.g. to tell user how to clear it.
+            clear_tooltip: shown over the image once a lasso is drawn, e.g. to tell user how to add to it, subtract from it or clear it.
             marching_ants: if True, the outline of the drawn lasso is animated. If False, it stays still.
             smoothing: each vertex of the lasso is averaged with this many neighbors on each side, as it is drawn, to smooth the jitter of the hand. If 0, the lasso is kept as drawn.
             every: Continuously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
@@ -122,29 +133,33 @@ class LassoTool(Component):
         config["canvas_id"] = self.canvas_id
         return config
 
-    def preprocess(self, payload: Lasso | None) -> list[tuple[int, int]] | None:
+    def preprocess(self, payload: Lasso | None) -> list[list[tuple[int, int]]] | None:
         """
         Parameters:
             payload: the lasso drawn by user, if any.
         Returns:
-            Passes lasso as a {list} of `(x, y)` vertices (pixels of the base layer image), or None if there is no lasso.
+            Passes lasso as a {list} of outlines, each a {list} of `(x, y)` vertices (pixels of the base layer image), or None if there is no lasso.
         """
         return None if payload is None else payload.root
 
-    def postprocess(self, value: list[tuple[int, int]] | None) -> Lasso | None:
+    def postprocess(self, value: list[list[tuple[int, int]]] | None) -> Lasso | None:
         """
         Parameters:
-            value: Expects a {list} of `(x, y)` vertices (pixels of the base layer image), or None to clear the lasso.
+            value: Expects a {list} of outlines, each a {list} of `(x, y)` vertices (pixels of the base layer image), or None to clear the lasso.
         Returns:
             The lasso to display.
         """
-        if value is None or len(value) < 3:
-            return None
+        # An outline needs 3 vertices to enclose a region.
+        outlines = [
+            [(round(x), round(y)) for x, y in outline]
+            for outline in value or []
+            if len(outline) >= 3
+        ]
 
-        return Lasso([(round(x), round(y)) for x, y in value])
+        return Lasso(outlines) if outlines else None
 
     def example_payload(self) -> Any:
-        return [(64, 320), (192, 64), (320, 320)]
+        return [[(64, 320), (192, 64), (320, 320)]]
 
     def example_value(self) -> Any:
-        return [(64, 320), (192, 64), (320, 320)]
+        return [[(64, 320), (192, 64), (320, 320)]]

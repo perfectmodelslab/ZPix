@@ -11,6 +11,12 @@ import polygon_clipping from "polygon-clipping";
 /** `[x, y]`, as Python passes a vertex. */
 export type Point = [number, number];
 
+/**
+ * Outlines of the selected regions. A point is selected if it lies inside an
+ * odd number of them, so an outline inside another one is a hole.
+ */
+export type Lasso = Point[][];
+
 /** What a lasso drawn with a shortcut held does to the current one. */
 type Operation = "add" | "subtract";
 
@@ -100,7 +106,7 @@ const STYLE = `
 	}
 
 	polyline,
-	polygon {
+	path {
 		display: none;
 		fill: none;
 		stroke-width: 1px;
@@ -135,12 +141,12 @@ const STYLE = `
 export class LassoOverlay extends HTMLElement {
 	#target: HTMLImageElement | null = null;
 	/** As drawn, kept intact while browsing images. */
-	#lasso: Point[] | null = null;
+	#lasso: Lasso | null = null;
 	/** Resolution of the image lasso was drawn over. */
 	#size: Size | null = null;
 	#draft_el: SVGPolylineElement;
-	#lasso_el: SVGPolygonElement;
-	#ants_el: SVGPolygonElement;
+	#lasso_el: SVGPathElement;
+	#ants_el: SVGPathElement;
 	/** Last emitted value, as JSON, to emit only changes. */
 	#emitted = "null";
 
@@ -163,7 +169,7 @@ export class LassoOverlay extends HTMLElement {
 	/** Where user pressed, in client pixels, to tell a click from a move. */
 	#press: Point | null = null;
 	/** Lasso as it was when user pressed, back if user cancels. */
-	#original: Point[] | null = null;
+	#original: Lasso | null = null;
 	/** Lasso being drawn, applied to the current one on release. */
 	#draft: Point[] | null = null;
 	/** Element outside overlay that pointer is over, while user drags image. */
@@ -208,8 +214,8 @@ export class LassoOverlay extends HTMLElement {
 		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 		// Lasso being drawn goes over the one it adds to or subtracts from.
 		svg.innerHTML =
-			'<polygon id="lasso"></polygon>' +
-			'<polygon id="ants"></polygon>' +
+			'<path id="lasso"></path>' +
+			'<path id="ants"></path>' +
 			'<polyline id="draft"></polyline>';
 		this.#draft_el = svg.querySelector("#draft")!;
 		this.#lasso_el = svg.querySelector("#lasso")!;
@@ -270,12 +276,12 @@ export class LassoOverlay extends HTMLElement {
 	 * Lasso in pixels of the displayed image, scaled to it.
 	 * Setting it emits no event.
 	 */
-	get value(): Point[] | null {
+	get value(): Lasso | null {
 		return this.#scaled();
 	}
 
-	set value(lasso: Point[] | null) {
-		this.#lasso = lasso && lasso.map(([x, y]): Point => [x, y]);
+	set value(lasso: Lasso | null) {
+		this.#lasso = lasso && lasso.map((outline) => outline.map(([x, y]): Point => [x, y]));
 		// Value refers to displayed image, if any.
 		this.#size = natural_size(this.#target) ?? this.#size;
 		this.#emitted = JSON.stringify(round(this.#scaled()));
@@ -349,7 +355,7 @@ export class LassoOverlay extends HTMLElement {
 	 * Lasso scaled to displayed image, whose resolution may differ from the
 	 * drawn one, so it surrounds the same region.
 	 */
-	#scaled(): Point[] | null {
+	#scaled(): Lasso | null {
 		const lasso = this.#lasso;
 		const size = natural_size(this.#target);
 		if (!lasso || !size || !this.#size) return lasso;
@@ -357,7 +363,9 @@ export class LassoOverlay extends HTMLElement {
 		const scale_x = size.width / this.#size.width;
 		const scale_y = size.height / this.#size.height;
 
-		return lasso.map(([x, y]): Point => [x * scale_x, y * scale_y]);
+		return lasso.map((outline) =>
+			outline.map(([x, y]): Point => [x * scale_x, y * scale_y])
+		);
 	}
 
 	#point_from_event(event: PointerEvent): Point {
@@ -384,14 +392,18 @@ export class LassoOverlay extends HTMLElement {
 
 		this.title = this.#tooltips[lasso ? 1 : 0];
 
-		for (const [el, points] of [
-			[this.#draft_el, draft],
-			[this.#lasso_el, lasso],
-			[this.#ants_el, lasso]
-		] as const) {
-			el.style.display = points ? "inline" : "none";
-			// Drawn in overlay pixels, for strokes and dashes to keep their size.
-			if (points) el.setAttribute("points", this.#to_svg(points, image!));
+		this.#draft_el.style.display = draft ? "inline" : "none";
+		// Drawn in overlay pixels, for strokes and dashes to keep their size.
+		if (draft) this.#draft_el.setAttribute("points", this.#to_svg(draft, image!));
+
+		for (const el of [this.#lasso_el, this.#ants_el]) {
+			el.style.display = lasso ? "inline" : "none";
+			if (lasso) {
+				el.setAttribute(
+					"d",
+					lasso.map((outline) => `M${this.#to_svg(outline, image!)}Z`).join("")
+				);
+			}
 		}
 	}
 
@@ -436,8 +448,9 @@ export class LassoOverlay extends HTMLElement {
 
 	/**
 	 * A click clears the lasso, and a drag draws a new one, which replaces
-	 * the current one at once and closes on release, or adds to it with Shift
-	 * held, or subtracts from it with Alt held. User may as well drag displayed
+	 * the current one at once and closes on release, or adds a region to it
+	 * with Shift held, even apart from the others, or subtracts one from it
+	 * with Alt held. User may as well drag displayed
 	 * image to another element, e.g. a prompt left of the canvas: leaving the
 	 * area (canvas) turns the drawing into a drop.
 	 */
@@ -538,10 +551,10 @@ export class LassoOverlay extends HTMLElement {
 				return;
 			}
 
-			this.#lasso = draft;
+			this.#lasso = [draft];
 		} else if (draft && draft.length >= MIN_POINTS) {
 			// Adding to no lasso draws one, subtracting from it does nothing.
-			if (!lasso) this.#lasso = operation === "add" ? draft : null;
+			if (!lasso) this.#lasso = operation === "add" ? [draft] : null;
 			else this.#lasso = combine(lasso, draft, operation) ?? lasso;
 		}
 
@@ -672,42 +685,33 @@ function shortcut_operation(event: KeyboardEvent | PointerEvent): Operation | nu
 }
 
 /**
- * Union or difference of two lassos, or null if empty or if polygon-clipping
- * fails. A lasso encloses one region: of several, the largest one is kept,
- * holes filled.
+ * Lasso with the region an outline encloses added or subtracted, or null if
+ * nothing is left or if polygon-clipping fails. Regions apart from each other
+ * and holes are kept, each as an outline.
  */
-function combine(lasso: Point[], other: Point[], operation: Operation): Point[] | null {
+function combine(lasso: Lasso, outline: Point[], operation: Operation): Lasso | null {
 	let result: polygon_clipping.MultiPolygon;
 
 	try {
+		// Exclusive or of outlines selects what lies inside an odd number of them.
+		const [first, ...others] = lasso.map((ring): polygon_clipping.Polygon => [ring]);
+		const region = polygon_clipping.xor(first, ...others);
+
 		result =
 			operation === "add"
-				? polygon_clipping.union([lasso], [other])
-				: polygon_clipping.difference([lasso], [other]);
+				? polygon_clipping.union(region, [outline])
+				: polygon_clipping.difference(region, [outline]);
 	} catch (error) {
 		console.warn("Lasso tool couldn't combine lassos:", error);
 		return null;
 	}
 
-	const outlines = result.map((polygon) => polygon[0]);
-	if (!outlines.length) return null;
-
-	const largest = outlines.reduce((a, b) => (area(b) > area(a) ? b : a));
-
 	// Rings repeat their first vertex last.
-	return largest.slice(0, -1).map(([x, y]): Point => [x, y]);
-}
+	const outlines = result.flatMap((polygon) =>
+		polygon.map((ring) => ring.slice(0, -1).map(([x, y]): Point => [x, y]))
+	);
 
-/** Shoelace formula. */
-function area(ring: [number, number][]): number {
-	let sum = 0;
-	for (let i = 0; i < ring.length; i++) {
-		const [x1, y1] = ring[i];
-		const [x2, y2] = ring[(i + 1) % ring.length];
-		sum += x1 * y2 - x2 * y1;
-	}
-
-	return Math.abs(sum) / 2;
+	return outlines.length ? outlines : null;
 }
 
 /** Resolution of an image, once loaded. */
@@ -717,8 +721,11 @@ function natural_size(image: HTMLImageElement | null): Size | null {
 		: null;
 }
 
-function round(lasso: Point[] | null): Point[] | null {
-	return lasso && lasso.map(([x, y]): Point => [Math.round(x), Math.round(y)]);
+function round(lasso: Lasso | null): Lasso | null {
+	return (
+		lasso &&
+		lasso.map((outline) => outline.map(([x, y]): Point => [Math.round(x), Math.round(y)]))
+	);
 }
 
 function clamp(value: number, min: number, max: number): number {

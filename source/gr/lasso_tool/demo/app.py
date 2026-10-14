@@ -12,7 +12,7 @@ with gr.Blocks(analytics_enabled=False) as demo:
         enable_tooltip="Enable lasso (L)",
         disable_tooltip="Disable lasso",
         draw_tooltip="Drag to draw a lasso",
-        clear_tooltip="Hold Shift to enlarge selection\nHold Alt to reduce selection\nClick to clear the lasso",
+        clear_tooltip="Shift: add to selection\nAlt: subtract from selection\nClick: clear selection",
     )
 
     with gr.Row():
@@ -20,7 +20,7 @@ with gr.Blocks(analytics_enabled=False) as demo:
         mask = gr.Image(label="Mask", interactive=False)
 
     lasso.change(
-        lambda points: points and lasso_to_mask(points, image.size),
+        lambda outlines: outlines and lasso_to_mask(outlines, image.size),
         inputs=lasso,
         outputs=mask,
     )

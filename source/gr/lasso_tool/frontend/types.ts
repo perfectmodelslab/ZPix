@@ -1,8 +1,8 @@
 import type { ILoadingStatus as LoadingStatus } from "@gradio/statustracker";
-import type { Point } from "./lasso";
+import type { Lasso } from "./lasso";
 
 export interface LassoToolProps {
-	value: Point[] | null;
+	value: Lasso | null;
 	canvas_id: number | null;
 	enable_tooltip: string | null;
 	disable_tooltip: string | null;

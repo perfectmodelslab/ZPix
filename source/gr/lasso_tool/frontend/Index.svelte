@@ -5,7 +5,7 @@
 	import { onDestroy, onMount } from "svelte";
 	import { find_host, type CanvasHost } from "./canvas_host";
 	import LassoIcon from "./LassoIcon.svelte";
-	import { LassoOverlay, OVERLAY_TAG, type Point } from "./lasso";
+	import { LassoOverlay, OVERLAY_TAG, type Lasso } from "./lasso";
 
 	const props = $props();
 	const gradio = new Gradio<LassoToolEvents, LassoToolProps>(props);
@@ -15,7 +15,7 @@
 	const overlay = document.createElement(OVERLAY_TAG) as LassoOverlay;
 	let button: HTMLElement;
 
-	let old_value: Point[] | null = gradio.props.value ?? null;
+	let old_value: Lasso | null = gradio.props.value ?? null;
 	overlay.value = old_value;
 
 	let host: CanvasHost | null = $state(null);
@@ -23,12 +23,12 @@
 	let active = $state(false);
 	let forget_host: (() => void) | null = null;
 
-	function same_lasso(a: Point[] | null, b: Point[] | null): boolean {
+	function same_lasso(a: Lasso | null, b: Lasso | null): boolean {
 		return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 	}
 
 	/** Tell whether lasso appeared or disappeared, if so. */
-	function dispatch_presence(old: Point[] | null, value: Point[] | null): void {
+	function dispatch_presence(old: Lasso | null, value: Lasso | null): void {
 		if (!old && value) gradio.dispatch("drawn");
 		else if (old && !value) gradio.dispatch("cleared");
 	}
@@ -91,7 +91,7 @@
 
 		// Not passed back to overlay, which emitted it.
 		overlay.addEventListener("lasso-change", (event) => {
-			const value = (event as CustomEvent<Point[] | null>).detail;
+			const value = (event as CustomEvent<Lasso | null>).detail;
 			dispatch_presence(old_value, value);
 			old_value = value;
 			gradio.props.value = value;

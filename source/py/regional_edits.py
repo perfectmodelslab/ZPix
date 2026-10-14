@@ -83,7 +83,7 @@ def sync_ui_to_inpainting_mode(
 
 def get_inpaint_source(
     model: ImageModel,
-    lasso: list[tuple[int, int]] | None,
+    lasso: list[list[tuple[int, int]]] | None,
     doc: Doc | None,
 ) -> Image.Image | None:
     """Get the image of the document displayed in canvas, if user drew a region
@@ -171,7 +171,9 @@ def get_inpaint_kwargs(
 
 
 def keep_outside_region(
-    inpaint_source: Image.Image, image: Image.Image, lasso: list[tuple[int, int]]
+    inpaint_source: Image.Image,
+    image: Image.Image,
+    lasso: list[list[tuple[int, int]]],
 ) -> Image.Image:
     """Paste the source image back outside the region regenerated in image.
 
@@ -186,12 +188,13 @@ def keep_outside_region(
     # Grown past what spilled out of the lasso, so the feather lies where both
     # images only differ by drift. Goes on to the second vertex, else the first
     # one is the only joint not rounded.
-    ImageDraw.Draw(region_mask).line(
-        [*lasso, *lasso[:2]],
-        fill=255,
-        width=2 * (LATENT_CELL + 2 * FEATHER_RADIUS) + 1,
-        joint="curve",
-    )
+    for outline in lasso:
+        ImageDraw.Draw(region_mask).line(
+            [*outline, *outline[:2]],
+            fill=255,
+            width=2 * (LATENT_CELL + 2 * FEATHER_RADIUS) + 1,
+            joint="curve",
+        )
 
     kept_image = inpaint_source.copy()
     kept_image.paste(

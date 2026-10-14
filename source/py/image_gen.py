@@ -50,7 +50,7 @@ def generate(
     cfg: float,
     canvas: CanvasValue,
     lora_name: str | None,
-    lasso: list[tuple[int, int]] | None,
+    lasso: list[list[tuple[int, int]]] | None,
     inpaint_steps: int,
     high_res_fix_factor: float,
 ) -> tuple[CanvasValue, int]:

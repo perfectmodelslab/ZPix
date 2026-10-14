@@ -758,10 +758,11 @@ if __name__ == "__main__":
                     draw_tooltip=t("Select an area to inpaint"),
                     clear_tooltip="\n".join(
                         [
-                            t("Hold Shift or {alt} to modify selection").format(
+                            t("Shift: add to selection"),
+                            t("{alt}: subtract from selection").format(
                                 alt=get_key_name("Alt")
                             ),
-                            t("Click to clear selection"),
+                            t("Click: clear selection"),
                         ]
                     ),
                     interactive=initial_model.supports_inpainting(),

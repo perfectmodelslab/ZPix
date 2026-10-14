@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { Point } from "./lasso";
+	import type { Lasso } from "./lasso";
 
-	export let value: Point[] | null;
+	export let value: Lasso | null;
 	export let type: "gallery" | "table";
 	export let selected = false;
 </script>
@@ -12,7 +12,7 @@
 	class:selected
 >
 	{#if value}
-		{value.length} points
+		{value.flat().length} points
 	{:else}
 		—
 	{/if}
