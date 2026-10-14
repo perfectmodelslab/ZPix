@@ -92,8 +92,10 @@ const STYLE = `
 		display: none !important;
 	}
 
+	/* Cursor changes as overlay gets enabled, for browser to show it at once. */
 	:host([disabled]) {
 		pointer-events: none;
+		cursor: auto;
 	}
 
 	svg {
