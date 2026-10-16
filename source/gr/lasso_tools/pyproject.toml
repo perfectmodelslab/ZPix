@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "gradio_lasso_tool"
+name = "gradio_lasso_tools"
 version = "1.0.0"
-description = "Freehand lasso drawn over a Gradio canvas document"
+description = "Freehand and polygonal lassos drawn over a Gradio canvas document"
 license = "GPL-3.0-or-later"
 # Third-party notices, as their licenses require, since the frontend bundles
 # their code. The build strips them from it.
@@ -16,10 +16,10 @@ keywords = ["gradio-custom-component"]
 dependencies = ["gradio>=6.0,<7.0"]
 
 [tool.hatch.build]
-artifacts = ["/backend/gradio_lasso_tool/templates", "*.pyi"]
+artifacts = ["/backend/gradio_lasso_tools/templates", "*.pyi"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["/backend/gradio_lasso_tool"]
+packages = ["/backend/gradio_lasso_tools"]
 
 [tool.ruff]
 extend-exclude = ["*.pyi"]

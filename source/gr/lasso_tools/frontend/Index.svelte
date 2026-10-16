@@ -4,24 +4,47 @@
 	import { Gradio } from "@gradio/utils";
 	import { onDestroy, onMount } from "svelte";
 	import { find_host, type CanvasHost } from "./canvas_host";
+	import { LassoGroup, type LassoTool } from "./group";
 	import LassoIcon from "./LassoIcon.svelte";
-	import { LassoOverlay, OVERLAY_TAG, type Lasso } from "./lasso";
+	import type { Lasso } from "./lasso";
+	import PolygonalLassoIcon from "./PolygonalLassoIcon.svelte";
 
 	const props = $props();
 	const gradio = new Gradio<LassoToolEvents, LassoToolProps>(props);
 
-	// This component renders nothing in place: its overlay goes over the
-	// document displayed by the canvas, and its button in the canvas toolbar.
-	const overlay = document.createElement(OVERLAY_TAG) as LassoOverlay;
+	// This component renders nothing in place: the lasso goes over the
+	// document displayed by the canvas, on the overlay its lasso tools share,
+	// and the tool button in the canvas toolbar.
 	let button: HTMLElement;
 
 	let old_value: Lasso | null = gradio.props.value ?? null;
-	overlay.value = old_value;
 
 	let host: CanvasHost | null = $state(null);
+	let group: LassoGroup | null = null;
 	/** Whether user selected this tool in the canvas. */
 	let active = $state(false);
 	let forget_host: (() => void) | null = null;
+
+	const tool: LassoTool = {
+		id: gradio.shared.id,
+		state: {
+			mode: "freehand",
+			visible: true,
+			interactive: true,
+			marching_ants: true,
+			smoothing: 1,
+			tooltips: ["", ""]
+		},
+		on_change(value, input) {
+			if (same_lasso(value, old_value)) return;
+
+			dispatch_presence(old_value, value);
+			old_value = value;
+			gradio.props.value = value;
+			if (input) gradio.dispatch("input");
+			gradio.dispatch("change");
+		}
+	};
 
 	function same_lasso(a: Lasso | null, b: Lasso | null): boolean {
 		return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -37,10 +60,9 @@
 		if (host) return;
 
 		host = canvas;
-		canvas.stage.append(overlay);
 		canvas.add_tool(gradio.shared.id, button);
-		overlay.area = canvas.area;
-		overlay.target = canvas.image;
+		group = LassoGroup.of(canvas);
+		group.join(tool, old_value);
 
 		const update = (): void => {
 			active = canvas.tool === gradio.shared.id;
@@ -53,51 +75,10 @@
 		if (host) host.tool = active ? null : gradio.shared.id;
 	}
 
-	function is_text_field(target: EventTarget | null): boolean {
-		return (
-			target instanceof HTMLElement &&
-			(target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-		);
-	}
-
-	/**
-	 * L selects this tool, unless user types text with pointer away from the
-	 * canvas area. Only its button deselects it.
-	 */
-	function on_keydown(event: KeyboardEvent): void {
-		if (
-			!host ||
-			active ||
-			gradio.shared.visible === false ||
-			gradio.shared.interactive === false ||
-			event.key.toLowerCase() !== "l" ||
-			event.defaultPrevented ||
-			event.altKey ||
-			event.ctrlKey ||
-			event.metaKey ||
-			(is_text_field(event.target) && !host.area.matches(":hover"))
-		) {
-			return;
-		}
-
-		event.preventDefault();
-		host.tool = gradio.shared.id;
-	}
-
 	onMount(() => {
 		// Nothing stays in place, so the Gradio wrapper takes no room in layout,
 		// e.g. no gap in a column.
 		if (button.parentElement) button.parentElement.hidden = true;
-
-		// Not passed back to overlay, which emitted it.
-		overlay.addEventListener("lasso-change", (event) => {
-			const value = (event as CustomEvent<Lasso | null>).detail;
-			dispatch_presence(old_value, value);
-			old_value = value;
-			gradio.props.value = value;
-			gradio.dispatch("input");
-			gradio.dispatch("change");
-		});
 
 		const canvas_id = gradio.props.canvas_id;
 		if (canvas_id !== null) forget_host = find_host(canvas_id, attach);
@@ -105,37 +86,33 @@
 
 	onDestroy(() => {
 		forget_host?.();
-		overlay.target = null;
-		overlay.remove();
+		group?.leave(gradio.shared.id);
 	});
 
-	// Value set by an event.
+	// Value set by an event: the other lasso tools of the canvas follow.
 	$effect(() => {
 		const value = gradio.props.value ?? null;
 		if (!same_lasso(value, old_value)) {
 			dispatch_presence(old_value, value);
 			old_value = value;
-			overlay.value = value;
+			group?.set_value(gradio.shared.id, value);
 			gradio.dispatch("change");
 		}
 	});
 
 	$effect(() => {
-		overlay.toggleAttribute(
-			"disabled",
-			!active || gradio.shared.interactive === false
-		);
-		overlay.toggleAttribute("hidden", gradio.shared.visible === false);
-		overlay.toggleAttribute("static", gradio.props.marching_ants === false);
-		overlay.smoothing = gradio.props.smoothing ?? 1;
-		overlay.tooltips = [
-			gradio.props.draw_tooltip ?? "",
-			gradio.props.clear_tooltip ?? ""
-		];
+		tool.state = {
+			mode: gradio.props.polygonal ? "polygonal" : "freehand",
+			visible: gradio.shared.visible !== false,
+			interactive: gradio.shared.interactive !== false,
+			marching_ants: gradio.props.marching_ants !== false,
+			smoothing: gradio.props.smoothing ?? 1,
+			tooltips: [gradio.props.draw_tooltip ?? "", gradio.props.clear_tooltip ?? ""]
+		};
+		// Reading `host` applies the state again once attached.
+		if (host) group?.refresh();
 	});
 </script>
-
-<svelte:window onkeydown={on_keydown} />
 
 <!-- Moved into the canvas toolbar once attached. -->
 <div
@@ -143,7 +120,7 @@
 	hidden={!host || gradio.shared.visible === false}
 >
 	<IconButton
-		Icon={LassoIcon}
+		Icon={gradio.props.polygonal ? PolygonalLassoIcon : LassoIcon}
 		label={(active
 			? gradio.props.disable_tooltip
 			: gradio.props.enable_tooltip) ?? ""}

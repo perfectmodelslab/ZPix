@@ -46,7 +46,8 @@
 	let area: HTMLElement;
 	let stage: HTMLElement;
 	let image: HTMLImageElement;
-	let toolbar: HTMLElement;
+	/** One per tool group. */
+	const toolbars: HTMLElement[] = [];
 	let thumbs: HTMLElement | undefined = $state();
 	/** Width of the buttons column: 0 when it has no buttons. */
 	let buttons_width = $state(0);
@@ -281,7 +282,7 @@
 			stage,
 			image,
 			area,
-			toolbar,
+			toolbars,
 			gradio.props.tools ?? []
 		);
 
@@ -438,7 +439,9 @@
 					/>
 				</div>
 			{/if}
-			<div class="group toolbar" role="toolbar" bind:this={toolbar}></div>
+			{#each gradio.props.tools ?? [] as _group, i}
+				<div class="group toolbar" role="toolbar" bind:this={toolbars[i]}></div>
+			{/each}
 		</div>
 	</div>
 </Block>
@@ -629,20 +632,13 @@
 		gap: var(--spacing-sm);
 	}
 
-	/* Separator between buttons, as in IconButtonWrapper. */
-	.group:not(:empty) ~ .group:not(:empty)::before,
-	.group :global(> :not([hidden]) ~ :not([hidden]))::before {
+	/* Separator between groups, as between buttons in IconButtonWrapper. */
+	.group:not(:empty) ~ .group:not(:empty)::before {
 		content: "";
 		align-self: center;
 		width: 60%;
 		height: 1px;
 		background-color: var(--border-color-primary);
-	}
-
-	.group :global(> :not([hidden]) ~ :not([hidden])) {
-		display: flex;
-		flex-direction: column;
-		gap: var(--spacing-sm);
 	}
 
 	/* Larger than IconButton default, for actions and tools alike. Margin

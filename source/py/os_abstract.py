@@ -5,7 +5,7 @@ from pathlib import Path
 from subprocess import run
 from sys import platform
 
-MAC_KEY_NAMES = {"Alt": "Option"}
+MAC_KEY_NAMES = {"Alt": "Option", "Ctrl": "Cmd"}
 """Key names labeled differently on Mac keyboards."""
 
 

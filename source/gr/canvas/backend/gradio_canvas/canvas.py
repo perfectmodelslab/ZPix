@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, Self
 
@@ -172,9 +173,9 @@ class ToolEvent(EventData):
 
     def __init__(self, target: Block | None, data: Any):
         super().__init__(target, data)
-        tools: Sequence[Tool] = target.tools if isinstance(target, Canvas) else ()
+        tools = target.tools if isinstance(target, Canvas) else []
         self.tool: Tool | None = next(
-            (tool for tool in tools if tool._id == data["tool"]), None
+            (tool for tool in chain(*tools) if tool._id == data["tool"]), None
         )
         """Tool selected, or None if user unselected the active one."""
 
@@ -205,7 +206,7 @@ class Canvas(Component):
         self,
         docs: CanvasValue | Sequence[DocLike] | Callable | None = None,
         *,
-        tools: Sequence[Tool] = (),
+        tools: Sequence[Sequence[Tool]] = (),
         buttons: Sequence[Literal["fullscreen"]] = ("fullscreen",),
         fullscreen_tooltip: str = "Go fullscreen (F)",
         exit_fullscreen_tooltip: str = "Exit fullscreen mode (F)",
@@ -230,7 +231,7 @@ class Canvas(Component):
         """
         Parameters:
             docs: documents, as a CanvasValue or as a list of documents or images, the last one displayed. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
-            tools: tools to edit the displayed document with, e.g. a LassoTool. User selects one at a time, the first one at start.
+            tools: groups of tools to edit the displayed document with, e.g. [[free_lasso, poly_lasso]] for lasso tools. A separator sets groups apart in the toolbar. User selects one tool at a time, the first one at start.
             buttons: buttons shown at the top left of the canvas. "fullscreen" toggles fullscreen, as does the F key.
             fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas isn't fullscreen.
             exit_fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas is fullscreen.
@@ -252,7 +253,7 @@ class Canvas(Component):
             key: in a gr.render, Components with the same key across re-renders are treated as the same component, not a new component. Properties set in 'preserved_by_key' are not reset across a re-render.
             preserved_by_key: A list of parameters from this component's constructor. Inside a gr.render() function, if a component is re-rendered with the same key, these (and only these) parameters will be preserved in the UI (if they have been changed by the user or an event listener) instead of re-rendered based on the values provided during constructor.
         """
-        self.tools = list(tools)
+        self.tools = [list(group) for group in tools]
         self.buttons = list(buttons)
         self.fullscreen_tooltip = fullscreen_tooltip
         self.exit_fullscreen_tooltip = exit_fullscreen_tooltip
@@ -278,7 +279,7 @@ class Canvas(Component):
             preserved_by_key=preserved_by_key,
         )
 
-        for tool in self.tools:
+        for tool in chain(*self.tools):
             tool.canvas_id = self._id
 
     def get_config(self, cls: type[Block] | None = None) -> dict[str, Any]:
@@ -287,7 +288,7 @@ class Canvas(Component):
         config["value"] = self.value
         # Only tool IDs go to frontend, since Gradio would otherwise
         # serialize the whole tool configs.
-        config["tools"] = [tool._id for tool in self.tools]
+        config["tools"] = [[tool._id for tool in group] for group in self.tools]
         return config
 
     def preprocess(self, payload: CanvasData | None) -> CanvasValue:

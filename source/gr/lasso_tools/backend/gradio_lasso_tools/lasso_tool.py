@@ -1,9 +1,9 @@
-"""LassoTool Gradio custom component."""
+"""LassoTool: ancestor of lasso tool Gradio custom components."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from gradio.components.base import Component
 from gradio.data_classes import GradioRootModel
@@ -51,8 +51,12 @@ def lasso_to_mask(
 
 class LassoTool(Component):
     """
-    Lets user draw a freehand lasso over the document displayed by a canvas,
-    which hosts this tool, e.g. to mask a region to edit.
+    Lets user draw a lasso over the document displayed by a canvas, which
+    hosts this tool, e.g. to mask a region to edit.
+
+    Ancestor of FreehandLassoTool and PolygonalLassoTool, which differ only in
+    how user draws, so it can't be instantiated itself. Lasso tools of a canvas
+    share one selection: their values follow each other.
     """
 
     EVENTS = [  # noqa: RUF012 (Gradio API)
@@ -63,6 +67,9 @@ class LassoTool(Component):
     ]
 
     data_model = Lasso
+
+    POLYGONAL: ClassVar[bool]
+    """Whether user clicks vertices joined by straight segments, else drags."""
 
     def __init__(
         self,
@@ -92,18 +99,23 @@ class LassoTool(Component):
             draw_tooltip: shown over the image while no lasso is drawn, e.g. to tell user how to draw one.
             clear_tooltip: shown over the image once a lasso is drawn, e.g. to tell user how to add to it, subtract from it or clear it.
             marching_ants: if True, the outline of the drawn lasso is animated. If False, it stays still.
-            smoothing: each vertex of the lasso is averaged with this many neighbors on each side, as it is drawn, to smooth the jitter of the hand. If 0, the lasso is kept as drawn.
+            smoothing: each vertex of freehand segments is averaged with this many neighbors on each side, as it is drawn, to smooth the jitter of the hand. If 0, the lasso is kept as drawn.
             every: Continuously calls `value` to recalculate it if `value` is a function (has no effect otherwise). Can provide a Timer whose tick resets `value`, or a float that provides the regular interval for the reset Timer.
             inputs: Components that are used as inputs to calculate `value` if `value` is a function (has no effect otherwise). `value` is recalculated any time the inputs change.
-            interactive: if False, the lasso can't be drawn or cleared. If not provided, the component is interactive unless it's only used as an event output.
-            visible: If False, the lasso is not displayed.
+            interactive: if False, the lasso can't be drawn or cleared with this tool. If not provided, the component is interactive unless it's only used as an event output.
+            visible: If False, the tool button is hidden, and so is the lasso, unless another lasso tool of the canvas is visible.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM.
             render: If False, component will not render be rendered in the Blocks context. Should be used if the intention is to assign event listeners now but render the component later.
             key: in a gr.render, Components with the same key across re-renders are treated as the same component, not a new component. Properties set in 'preserved_by_key' are not reset across a re-render.
             preserved_by_key: A list of parameters from this component's constructor. Inside a gr.render() function, if a component is re-rendered with the same key, these (and only these) parameters will be preserved in the UI (if they have been changed by the user or an event listener) instead of re-rendered based on the values provided during constructor.
         """
-        # Set by the canvas hosting this tool, e.g. Canvas(tools=[lasso]).
+        if type(self) is LassoTool:
+            raise TypeError(
+                "LassoTool is abstract: use FreehandLassoTool or PolygonalLassoTool."
+            )
+
+        # Set by the canvas hosting this tool, e.g. Canvas(tools=[[free_lasso]]).
         self.canvas_id: int | None = None
 
         self.enable_tooltip = enable_tooltip
@@ -131,6 +143,7 @@ class LassoTool(Component):
     def get_config(self, cls: type[Block] | None = None) -> dict[str, Any]:
         config = super().get_config(cls)
         config["canvas_id"] = self.canvas_id
+        config["polygonal"] = self.POLYGONAL
         return config
 
     def preprocess(self, payload: Lasso | None) -> list[list[tuple[int, int]]] | None:

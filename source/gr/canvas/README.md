@@ -1,13 +1,13 @@
 # Gradio Canvas
 
-A custom component displaying documents one at a time, with thumbnails of all of them, and hosting tools to edit the displayed one, e.g. a [LassoTool](../lasso_tool/README.md).
+A custom component displaying documents one at a time, with thumbnails of all of them, and hosting tools to edit the displayed one, e.g. [lasso tools](../lasso_tools/README.md).
 
 ```python
 from gradio_canvas import Canvas, CanvasValue, DocEvent
 
 canvas = Canvas(
     [image],  # PIL images or documents
-    tools=[lasso],
+    tools=[[lasso]],
     caption_key="prompt",
     placeholder="Drop an image",
     height="80vh",
@@ -61,7 +61,7 @@ Events of a document pass a `DocEvent` to a listener argument annotated with it:
 
 ## Tools
 
-A tool is a component which renders nothing in place: canvas passes `tools` its ID (`canvas_id` attribute), by which they find its tool host in the frontend, as `host.ts` defines it. The host gives the element holding the displayed document, for overlays, its base layer image, and a toolbar, where each tool adds its button. User selects one tool at a time, the first one at start.
+`tools` is a list of tool groups, e.g. `[[lasso, brush], [eraser]]`: a separator sets groups apart in the toolbar. A tool is a component which renders nothing in place: canvas passes tools its ID (`canvas_id` attribute), by which they find its tool host in the frontend, as `host.ts` defines it. The host gives the element holding the displayed document, for overlays, its base layer image, and a toolbar, where each tool adds its button. User selects one tool at a time, the first one at start.
 
 ## Development
 

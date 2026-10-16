@@ -10,7 +10,7 @@ import gradio as gr
 import torch
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
 from gradio_canvas import CanvasValue, Doc, Layer
-from gradio_lasso_tool import lasso_to_mask
+from gradio_lasso_tools import lasso_to_mask
 from PIL import Image
 
 from source.py.blocking_task import BlockingTask

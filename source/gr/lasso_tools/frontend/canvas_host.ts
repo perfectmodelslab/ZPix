@@ -12,6 +12,8 @@ export interface CanvasHost extends EventTarget {
 	readonly stage: HTMLElement;
 	readonly image: HTMLImageElement;
 	readonly area: HTMLElement;
+	/** Tool IDs by group, in the order tools were given to canvas. */
+	readonly tool_groups: readonly (readonly number[])[];
 	tool: number | null;
 	add_tool(id: number, button: HTMLElement): void;
 }

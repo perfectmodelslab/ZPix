@@ -2,7 +2,7 @@
 
 import gradio as gr
 from gradio_canvas import Canvas, CanvasValue, DocEvent, ToolEvent
-from gradio_lasso_tool import LassoTool
+from gradio_lasso_tools import FreehandLassoTool
 from PIL import Image
 
 images = [Image.new("RGB", (1200, 800), color) for color in ("steelblue", "tomato")]
@@ -18,14 +18,16 @@ def log(line: str) -> str:
 
 
 with gr.Blocks(analytics_enabled=False) as demo:
-    lasso = LassoTool(
+    lasso = FreehandLassoTool(
         enable_tooltip="Enable lasso (L)",
         disable_tooltip="Disable lasso",
         draw_tooltip="Drag to draw a lasso",
     )
     canvas = Canvas(
         images,
-        tools=[lasso],
+        tools=[
+            [lasso],
+        ],
         placeholder="Drop an image",
         height="80vh",
         interactive=True,

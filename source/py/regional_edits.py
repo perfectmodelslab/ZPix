@@ -1,4 +1,4 @@
-"""Regional Edits: regenerate the region of an image drawn with LassoTool."""
+"""Regional Edits: regenerate the region of an image drawn with a lasso tool."""
 
 from math import ceil
 
@@ -10,7 +10,7 @@ from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.z_image.pipeline_z_image_inpaint import ZImageInpaintPipeline
 from gradio_canvas import Doc
-from gradio_lasso_tool import lasso_to_mask
+from gradio_lasso_tools import lasso_to_mask
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from source.py.anima_inpaint import create_anima_inpaint_pipe

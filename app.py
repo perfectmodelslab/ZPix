@@ -10,7 +10,7 @@ from shutil import rmtree
 import gradio as gr
 import torch
 from gradio_canvas import Canvas
-from gradio_lasso_tool import LassoTool
+from gradio_lasso_tools import FreehandLassoTool, PolygonalLassoTool
 
 # Force tensorwise FP8 matmul kernels as a fallback on hardware that lacks
 # native row-wise FP8 support, such as consumer NVIDIA Blackwell cards.
@@ -752,27 +752,45 @@ if __name__ == "__main__":
                 )
 
             with gr.Column(scale=2):
-                lasso = LassoTool(
+                alt = get_key_name("Alt")
+                selection_tooltips = [
+                    t("Shift: add to selection"),
+                    t("{alt}: subtract from selection").format(alt=alt),
+                    t("Shift+{alt}: intersect with selection").format(alt=alt),
+                ]
+                free_lasso = FreehandLassoTool(
                     enable_tooltip=t("Enable lasso (L)"),
                     disable_tooltip=t("Disable lasso"),
                     draw_tooltip=t("Select an area to inpaint"),
                     clear_tooltip="\n".join(
-                        [
-                            t("Shift: add to selection"),
-                            t("{alt}: subtract from selection").format(
-                                alt=get_key_name("Alt")
-                            ),
-                            t("Click: clear selection"),
-                        ]
+                        [*selection_tooltips, t("Click: clear selection")]
                     ),
                     interactive=initial_model.supports_inpainting(),
                 )
                 """Region to edit in displayed document."""
 
+                # Shares its selection with `free_lasso`, whose value follows it.
+                poly_lasso = PolygonalLassoTool(
+                    enable_tooltip=t("Enable polygonal lasso (L)"),
+                    disable_tooltip=t("Disable polygonal lasso"),
+                    draw_tooltip=t("Click around an area to inpaint"),
+                    clear_tooltip="\n".join(
+                        [
+                            *selection_tooltips,
+                            t("{ctrl}+D: clear selection").format(
+                                ctrl=get_key_name("Ctrl")
+                            ),
+                        ]
+                    ),
+                    interactive=initial_model.supports_inpainting(),
+                )
+
                 canvas = Canvas(
                     label=t("Canvas"),
                     show_label=False,
-                    tools=[lasso],
+                    tools=[
+                        [free_lasso, poly_lasso],
+                    ],
                     caption_key="prompt",
                     placeholder=t("Drop an image or generate one with a prompt"),
                     fullscreen_tooltip=t("Go fullscreen (F)"),
@@ -791,7 +809,7 @@ if __name__ == "__main__":
                     aspect_ratio,
                     resolution,
                 ]
-                lasso.drawn(
+                free_lasso.drawn(
                     lambda image_model: sync_ui_to_inpainting_mode(
                         image_model, lasso_drawn=True
                     ),
@@ -799,7 +817,7 @@ if __name__ == "__main__":
                     outputs=inpaint_settings,
                     show_progress="hidden",
                 )
-                lasso.cleared(
+                free_lasso.cleared(
                     lambda image_model: sync_ui_to_inpainting_mode(
                         image_model, lasso_drawn=False
                     ),
@@ -813,12 +831,13 @@ if __name__ == "__main__":
                 model_load.success(
                     lambda image_model, points: (
                         gr.update(interactive=image_model.supports_inpainting()),
+                        gr.update(interactive=image_model.supports_inpainting()),
                         *sync_ui_to_inpainting_mode(
                             image_model, lasso_drawn=bool(points)
                         ),
                     ),
-                    inputs=[model, lasso],
-                    outputs=[lasso, *inpaint_settings],
+                    inputs=[model, free_lasso],
+                    outputs=[free_lasso, poly_lasso, *inpaint_settings],
                     show_progress="hidden",
                 )
 
@@ -844,14 +863,14 @@ if __name__ == "__main__":
                     )
 
                     # Once canvas is empty, show example prompts and clear lasso:
-                    # see `lasso.cleared`.
+                    # see `free_lasso.cleared`.
                     canvas.empty(
                         lambda: (
                             gr.update(visible=False),
                             gr.update(visible=True),
                             None,
                         ),
-                        outputs=[discard_image_btn, examples_column, lasso],
+                        outputs=[discard_image_btn, examples_column, free_lasso],
                         show_progress="hidden",
                     )
                     # Once canvas is filled, hide example prompts.
@@ -971,7 +990,7 @@ if __name__ == "__main__":
                 cfg,
                 canvas,
                 lora_name,
-                lasso,
+                free_lasso,
                 inpaint_steps,
                 high_res_fix_factor,
             ],

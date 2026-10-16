@@ -19,7 +19,7 @@ export interface CanvasData {
 
 export interface CanvasProps {
 	value: CanvasData | null;
-	tools: number[];
+	tools: number[][];
 	buttons: "fullscreen"[];
 	fullscreen_tooltip: string;
 	exit_fullscreen_tooltip: string;

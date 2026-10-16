@@ -1,2 +1,2 @@
 gradio_canvas
-gradio_lasso_tool
+gradio_lasso_tools

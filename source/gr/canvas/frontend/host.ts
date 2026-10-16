@@ -28,13 +28,13 @@ export class CanvasHost extends EventTarget {
 		readonly image: HTMLImageElement,
 		/** Canvas area: a drag leaving it goes to another element. */
 		readonly area: HTMLElement,
-		/** Group of tool buttons. */
-		readonly toolbar: HTMLElement,
-		/** Tool IDs, in the order tools were given to canvas. */
-		readonly tool_ids: readonly number[]
+		/** Toolbars: one per tool group, holding its tool buttons. */
+		readonly toolbars: readonly HTMLElement[],
+		/** Tool IDs by group, in the order tools were given to canvas. */
+		readonly tool_groups: readonly (readonly number[])[]
 	) {
 		super();
-		this.#tool = tool_ids[0] ?? null;
+		this.#tool = tool_groups.flat()[0] ?? null;
 	}
 
 	/** ID of the active tool, if any. */
@@ -52,22 +52,28 @@ export class CanvasHost extends EventTarget {
 
 	/** Press the button of the active tool, release the others. */
 	#mark_tools(): void {
-		for (const el of this.toolbar.children as HTMLCollectionOf<HTMLElement>) {
-			el.querySelector("button")?.setAttribute(
-				"aria-pressed",
-				String(Number(el.dataset.tool) === this.#tool)
-			);
+		for (const toolbar of this.toolbars) {
+			for (const el of toolbar.children as HTMLCollectionOf<HTMLElement>) {
+				el.querySelector("button")?.setAttribute(
+					"aria-pressed",
+					String(Number(el.dataset.tool) === this.#tool)
+				);
+			}
 		}
 	}
 
-	/** Add the button of a tool to the toolbar, in tools order. */
+	/** Add the button of a tool to the toolbar of its group, in tools order. */
 	add_tool(id: number, button: HTMLElement): void {
+		const group = this.tool_groups.findIndex((ids) => ids.includes(id));
+		const toolbar = this.toolbars[group];
+		if (!toolbar) return;
+
 		const rank = (el: Element): number =>
-			this.tool_ids.indexOf(Number((el as HTMLElement).dataset.tool));
+			this.tool_groups[group].indexOf(Number((el as HTMLElement).dataset.tool));
 
 		button.dataset.tool = String(id);
-		const next = [...this.toolbar.children].find((el) => rank(el) > rank(button));
-		this.toolbar.insertBefore(button, next ?? null);
+		const next = [...toolbar.children].find((el) => rank(el) > rank(button));
+		toolbar.insertBefore(button, next ?? null);
 		this.#mark_tools();
 	}
 }
