@@ -1,9 +1,9 @@
-"""Krea 2 inpainting, assembled from the Diffusers Krea 2 modular blocks.
+"""Krea 2 inpainting, on top of Krea 2 image-to-image.
 
-Diffusers ships Krea 2 as text-to-image only. Inpainting here is image-to-image
-whose latents outside the mask are reset, after each step, to the source image
-noised to the next step's level, as Diffusers does for Qwen-Image, whose VAE
-and latent packing Krea 2 shares. The transformer never sees the mask.
+Inpainting here is image-to-image whose latents outside the mask are reset,
+after each step, to the source image noised to the next step's level, as
+Diffusers does for Qwen-Image, whose VAE and latent packing Krea 2 shares. The
+transformer never sees the mask.
 """
 
 from typing import Any
@@ -11,7 +11,6 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from diffusers.image_processor import VaeImageProcessor
-from diffusers.models import AutoencoderKLQwenImage
 from diffusers.modular_pipelines.krea2.before_denoise import (
     Krea2PrepareLatentsStep,
     Krea2PreparePositionIdsStep,
@@ -42,64 +41,39 @@ from diffusers.modular_pipelines.modular_pipeline import (
     PipelineState,
     SequentialPipelineBlocks,
 )
-from diffusers.modular_pipelines.modular_pipeline_utils import (
-    ComponentSpec,
-    InputParam,
-    OutputParam,
-)
-from diffusers.modular_pipelines.qwenimage.before_denoise import get_timesteps
-from diffusers.modular_pipelines.qwenimage.encoders import encode_vae_image
+from diffusers.modular_pipelines.modular_pipeline_utils import InputParam, OutputParam
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+
+from source.py.krea2_img2img import (
+    Krea2Img2ImgStrengthStep,
+    Krea2Img2ImgVaeEncoderStep,
+    pack_latents,
+)
 
 # Block states below are typed `Any`: Diffusers sets their attributes at runtime,
 # after the block's inputs and outputs, and types them as `dict`.
 
 
-def pack_latents(latents: torch.Tensor, patch_size: int) -> torch.Tensor:
-    """Pack latents (B, C, H, W) into tokens (B, H/p * W/p, C * p * p), as the
-    Krea 2 latents step does."""
-    batch, channels, height, width = latents.shape
-    p = patch_size
-
-    latents = latents.view(batch, channels, height // p, p, width // p, p)
-    latents = latents.permute(0, 2, 4, 1, 3, 5)
-
-    return latents.reshape(batch, (height // p) * (width // p), channels * p * p)
-
-
-class Krea2InpaintPrepareImageStep(ModularPipelineBlocks):
-    """Encode the source image and bring the mask image down to the latent
-    tokens: 1 where to regenerate."""
+class Krea2InpaintPrepareMaskStep(ModularPipelineBlocks):
+    """Bring the mask image down to the latent tokens: 1 where to regenerate."""
 
     model_name = "krea2"
 
     @property
     def description(self) -> str:
-        return "Encode the source image and pack it, with the mask, as Krea 2 tokens."
-
-    @property
-    def expected_components(self) -> list[ComponentSpec]:
-        return [ComponentSpec("vae", AutoencoderKLQwenImage)]
+        return "Binarize the mask image and pack it as Krea 2 tokens."
 
     @property
     def inputs(self) -> list[InputParam]:
         return [
-            InputParam.template("image"),
             InputParam.template("mask_image"),
             InputParam.template("height", required=True),
             InputParam.template("width", required=True),
-            InputParam.template("generator"),
-            InputParam("batch_size", required=True, type_hint=int),
         ]
 
     @property
     def intermediate_outputs(self) -> list[OutputParam]:
         return [
-            OutputParam(
-                "image_latents",
-                type_hint=torch.Tensor,
-                description="Packed latents of the source image.",
-            ),
             OutputParam(
                 "mask",
                 type_hint=torch.Tensor,
@@ -112,26 +86,9 @@ class Krea2InpaintPrepareImageStep(ModularPipelineBlocks):
         self, components: ModularPipeline, state: PipelineState
     ) -> tuple[ModularPipeline, PipelineState]:
         block_state: Any = self.get_block_state(state)
-        vae = components.vae
         vae_scale_factor = components.vae_scale_factor
         patch_size = components.patch_size
         height, width = block_state.height, block_state.width
-
-        image = VaeImageProcessor(
-            vae_scale_factor=vae_scale_factor * patch_size
-        ).preprocess(block_state.image, height=height, width=width)
-        image_latents = encode_vae_image(
-            image=image,
-            vae=vae,
-            generator=block_state.generator,
-            device=components._execution_device,
-            dtype=vae.dtype,
-            latent_channels=vae.config.z_dim,
-        )
-
-        # Krea 2 latents carry no frame axis, unlike the VAE's: (B, C, 1, H, W).
-        image_latents = pack_latents(image_latents[:, :, 0], patch_size)
-        block_state.image_latents = image_latents.repeat(block_state.batch_size, 1, 1)
 
         # Same processing as the Qwen-Image inpaint pipeline.
         mask_processor = VaeImageProcessor(
@@ -150,73 +107,9 @@ class Krea2InpaintPrepareImageStep(ModularPipelineBlocks):
         )
 
         # Each token packs all channels: so must the mask.
-        mask = mask.repeat(1, vae.config.z_dim, 1, 1)
+        mask = mask.repeat(1, components.vae.config.z_dim, 1, 1)
         block_state.mask = pack_latents(mask, patch_size).to(
             device=components._execution_device, dtype=torch.float32
-        )
-
-        self.set_block_state(state, block_state)
-        return components, state
-
-
-class Krea2InpaintStrengthStep(ModularPipelineBlocks):
-    """Skip the first steps, as much as strength spares, then noise the source
-    image to the level of the first remaining one.
-
-    The noise the latents step drew is kept, so the denoising loop can noise
-    the source image with it again.
-    """
-
-    model_name = "krea2"
-
-    @property
-    def description(self) -> str:
-        return "Truncate the Krea 2 schedule by strength and noise the source image."
-
-    @property
-    def inputs(self) -> list[InputParam]:
-        return [
-            InputParam.template("strength", default=0.9),
-            InputParam.template("num_inference_steps", required=True),
-            InputParam("timesteps", required=True, type_hint=torch.Tensor),
-            InputParam("latents", required=True, type_hint=torch.Tensor),
-            InputParam.template("image_latents"),
-        ]
-
-    @property
-    def intermediate_outputs(self) -> list[OutputParam]:
-        return [
-            OutputParam("timesteps", type_hint=torch.Tensor),
-            OutputParam("num_inference_steps", type_hint=int),
-            OutputParam(
-                "latents",
-                type_hint=torch.Tensor,
-                description="Source image latents, noised to start from.",
-            ),
-            OutputParam(
-                "initial_noise",
-                type_hint=torch.Tensor,
-                description="Noise to blend the source image latents with.",
-            ),
-        ]
-
-    @torch.no_grad()
-    def __call__(
-        self, components: ModularPipeline, state: PipelineState
-    ) -> tuple[ModularPipeline, PipelineState]:
-        block_state: Any = self.get_block_state(state)
-        scheduler = components.scheduler
-
-        block_state.timesteps, block_state.num_inference_steps = get_timesteps(
-            scheduler, block_state.num_inference_steps, block_state.strength
-        )
-
-        noise = block_state.latents
-        block_state.initial_noise = noise
-        block_state.latents = scheduler.scale_noise(
-            block_state.image_latents.to(noise),
-            block_state.timesteps[:1].repeat(noise.shape[0]),
-            noise,
         )
 
         self.set_block_state(state, block_state)
@@ -278,7 +171,7 @@ class Krea2LoopAfterDenoiserInpaint(ModularPipelineBlocks):
 
 
 def create_krea2_inpaint_blocks(turbo: bool) -> SequentialPipelineBlocks:
-    """Create the Krea 2 text-to-image blocks, plus the source image and mask.
+    """Create the Krea 2 image-to-image blocks, plus the mask.
 
     Args:
         turbo: Whether to create them for the distilled checkpoint, which runs
@@ -303,11 +196,12 @@ def create_krea2_inpaint_blocks(turbo: bool) -> SequentialPipelineBlocks:
             # Rounds height and width to what packing takes, before the source
             # image and mask are brought to them.
             "prepare_latents": Krea2PrepareLatentsStep,
-            "prepare_image": Krea2InpaintPrepareImageStep,
+            "vae_encoder": Krea2Img2ImgVaeEncoderStep,
+            "prepare_mask": Krea2InpaintPrepareMaskStep,
             "set_timesteps": (
                 Krea2TurboSetTimestepsStep if turbo else Krea2SetTimestepsStep
             ),
-            "strength": Krea2InpaintStrengthStep,
+            "strength": Krea2Img2ImgStrengthStep,
             "prepare_position_ids": Krea2PreparePositionIdsStep,
             "denoise": denoise,
             "decode": Krea2DecodeStep,

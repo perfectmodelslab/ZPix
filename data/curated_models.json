@@ -69,7 +69,7 @@
             "cfg": 0.0,
             "inpaint_strength_ratio": 0.5
         },
-        "features": ["text-to-image"]
+        "features": ["text-to-image", "image-to-image"]
     },
     {
         "id": "SamuelTallet/Qwen-Image-2.1-Turbo-SDNQ-4bit-dynamic-hadamard256",

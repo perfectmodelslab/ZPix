@@ -33,6 +33,7 @@ from source.py.custom_logger import logger
 from source.py.frame_cache import drop_frame_features
 from source.py.image_model import ImageModel
 from source.py.krea2_flash import install_krea2_flash_attn
+from source.py.krea2_img2img import create_krea2_img2img_pipe
 from source.py.offload_strat import (
     DENOISER_RANK,
     ENCODER_RANK,
@@ -420,6 +421,10 @@ class ImagePipeline:
 
             modular_pipeline = ModularPipeline.from_pretrained(model_id)
             modular_pipeline.load_components(dtype=torch.bfloat16)
+
+            # Diffusers ships Krea 2 as text-to-image only.
+            if model.family == "Krea 2":
+                return create_krea2_img2img_pipe(modular_pipeline)
 
             return modular_pipeline
 
