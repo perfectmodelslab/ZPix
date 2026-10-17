@@ -297,15 +297,7 @@ if __name__ == "__main__":
 
                 # Hidden in place of inpainting settings when a lasso is drawn.
                 with gr.Column(elem_id="ref-images-column") as ref_images_column:
-                    with gr.Row(
-                        # A row hidden on startup is not mounted by Gradio,
-                        # that's why we use the "hidden" class instead of the `visible` property.
-                        elem_classes=(
-                            []
-                            if "image-to-image" in initial_model.features
-                            else ["hidden"]
-                        )
-                    ) as reference_images_row:
+                    with gr.Row():
                         reference_images = gr.MultimodalTextbox(
                             label=get_ref_images_label(image_pipe, t),
                             sources=["upload"],
@@ -684,18 +676,11 @@ if __name__ == "__main__":
                     )
 
                 # On model load success:
-                # - display reference images block and settings if model supports them,
+                # - update reference images block and strength row according to model,
                 # - update other settings according to model,
                 # - release model dropdown.
                 model_load.success(
                     lambda image_model, ref_images: (
-                        gr.update(
-                            elem_classes=(
-                                []
-                                if "image-to-image" in image_model.features
-                                else ["hidden"]
-                            )
-                        ),
                         update_ref_images(image_model, image_pipe, ref_images, t),
                         show_ref_image_strength(image_pipe, ref_images),
                         gr.update(value=image_model.default.steps),
@@ -704,7 +689,6 @@ if __name__ == "__main__":
                     ),
                     inputs=[model, reference_images],
                     outputs=[
-                        reference_images_row,
                         reference_images,
                         ref_image_strength_row,
                         steps,

@@ -103,11 +103,7 @@ def generate(
 
     ref_images = []
 
-    if (
-        reference_images
-        and reference_images.get("files")
-        and "image-to-image" in model.features
-    ):
+    if reference_images and reference_images.get("files"):
         ref_images = [normalize_ref_image(file) for file in reference_images["files"]]
 
     # Regenerate drawn region of displayed image, at its resolution.

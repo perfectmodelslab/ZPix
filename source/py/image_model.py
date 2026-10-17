@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel
 
 
@@ -39,14 +37,6 @@ class ImageModel(BaseModel):
 
     default: Settings
     """Default settings of this model."""
-
-    features: list[
-        Literal[
-            "text-to-image",
-            "image-to-image",
-        ]
-    ]
-    """Features supported by this model."""
 
     def supports_inpainting(self) -> bool:
         """Does this model's family support inpainting?"""
