@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from math import ceil
 
+import torch.nn.functional as F
+from diffusers.image_processor import VaeImageProcessor
 from PIL import Image, ImageFilter
 
 HIGH_RES_FIX_FACTORS = (1.5, 2.0)
@@ -19,6 +21,27 @@ CONTEXT_MARGIN = 64
 
 SIZE_MULTIPLE = 32
 """What every family can split into latent patches."""
+
+TONE_CELL = 32
+"""Pixels the tone of the region is averaged over: the second pass adds finer
+details, but can shift the tone, e.g. lighten the region."""
+
+
+def keep_tone(image: Image.Image, denoised_image: Image.Image) -> Image.Image:
+    """Give denoised image the tone of image, keeping its finer details."""
+    pixels = VaeImageProcessor.numpy_to_pt(
+        VaeImageProcessor.pil_to_numpy([image, denoised_image])
+    )
+    cells = (ceil(image.height / TONE_CELL), ceil(image.width / TONE_CELL))
+    # Averaged over cells, smoothly spread back.
+    low_frequencies = F.interpolate(
+        F.interpolate(pixels, cells, mode="area"), pixels.shape[2:], mode="bilinear"
+    )
+    denoised = pixels[1:] + low_frequencies[:1] - low_frequencies[1:]
+
+    return VaeImageProcessor.numpy_to_pil(
+        VaeImageProcessor.pt_to_numpy(denoised.clamp(0, 1))
+    )[0]
 
 
 def high_res_fix_steps(steps: int, strength: float = HIGH_RES_FIX_STRENGTH) -> int:
@@ -63,6 +86,7 @@ def high_res_fix(
         region.resize(high_res_size, Image.Resampling.LANCZOS),
         region_mask.resize(high_res_size, Image.Resampling.LANCZOS),
     ).resize(region.size, Image.Resampling.LANCZOS)
+    fixed_region = keep_tone(region, fixed_region)
 
     # Feathered, so no seam shows along the region.
     fixed_image = image.copy()

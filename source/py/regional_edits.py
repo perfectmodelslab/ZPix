@@ -4,6 +4,9 @@ from inspect import signature
 from math import ceil
 
 import gradio as gr
+import torch
+import torch.nn.functional as F
+from diffusers.image_processor import VaeImageProcessor
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
 from diffusers.pipelines.flux.pipeline_flux_inpaint import FluxInpaintPipeline
 from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
@@ -42,6 +45,10 @@ most, whatever size it is asked for."""
 
 FEATHER_RADIUS = 4
 """Blur of the edge the source image is pasted back along, so no seam shows."""
+
+DRIFT_MAX = 32 / 255
+"""Difference to the source image, in a channel, beyond which a pixel around the
+lasso is regenerated content, rather than drift."""
 
 
 def get_inpaint_steps(strength: float, steps: int) -> int:
@@ -207,21 +214,112 @@ def keep_outside_region(
     if image.size != inpaint_source.size:
         image = image.resize(inpaint_source.size, Image.Resampling.LANCZOS)
 
-    region_mask = lasso_to_mask(lasso, inpaint_source.size)
+    lasso_mask = lasso_to_mask(lasso, inpaint_source.size)
+    spill_mask = grow_lasso_mask(lasso, lasso_mask, LATENT_CELL)
     # Grown past what spilled out of the lasso, so the feather lies where both
-    # images only differ by drift. Goes on to the second vertex, else the first
-    # one is the only joint not rounded.
+    # images only differ by drift.
+    region_mask = grow_lasso_mask(lasso, lasso_mask, LATENT_CELL + 2 * FEATHER_RADIUS)
+
+    feathered_mask = region_mask.filter(ImageFilter.GaussianBlur(FEATHER_RADIUS))
+    image = remove_drift(inpaint_source, image, lasso_mask, spill_mask, feathered_mask)
+
+    kept_image = inpaint_source.copy()
+    kept_image.paste(image, mask=feathered_mask)
+
+    return kept_image
+
+
+def grow_lasso_mask(
+    lasso: list[list[tuple[int, int]]], lasso_mask: Image.Image, margin: int
+) -> Image.Image:
+    """Grow the mask of a lasso by margin pixels, with rounded joints."""
+    grown_mask = lasso_mask.copy()
+
+    # Goes on to the second vertex, else the first one is the only joint not
+    # rounded.
     for outline in lasso:
-        ImageDraw.Draw(region_mask).line(
+        ImageDraw.Draw(grown_mask).line(
             [*outline, *outline[:2]],
             fill=255,
-            width=2 * (LATENT_CELL + 2 * FEATHER_RADIUS) + 1,
+            width=2 * margin + 1,
             joint="curve",
         )
 
-    kept_image = inpaint_source.copy()
-    kept_image.paste(
-        image, mask=region_mask.filter(ImageFilter.GaussianBlur(FEATHER_RADIUS))
+    return grown_mask
+
+
+def remove_drift(
+    inpaint_source: Image.Image,
+    image: Image.Image,
+    lasso_mask: Image.Image,
+    spill_mask: Image.Image,
+    region_mask: Image.Image,
+) -> Image.Image:
+    """Take off image the tone drift it shows around the lasso, over the region.
+
+    Model can shift the tone of the region it regenerates, e.g. lighten it, and
+    it spills out of the lasso, the more the closer. Measured where the region
+    spilled, against the source image, it is spread over the region, so no halo
+    shows once pasted back.
+    """
+    box = region_mask.getbbox()
+
+    if box is None:
+        return image
+
+    source, regenerated = VaeImageProcessor.numpy_to_pt(
+        VaeImageProcessor.pil_to_numpy([inpaint_source.crop(box), image.crop(box)])
+    )[:, None]
+    in_lasso, in_spill = VaeImageProcessor.numpy_to_pt(
+        VaeImageProcessor.pil_to_numpy([lasso_mask.crop(box), spill_mask.crop(box)])
+    )[:, None]
+    drift = regenerated - source
+    # Around the lasso, where both images show the same content.
+    weights = (
+        (in_spill > 0)
+        & (in_lasso == 0)
+        & (drift.abs().amax(dim=1, keepdim=True) <= DRIFT_MAX)
+    ).float()
+
+    height, width = drift.shape[2:]
+    cells = (ceil(height / LATENT_CELL), ceil(width / LATENT_CELL))
+    cell_weights = F.interpolate(weights, cells, mode="area")
+    cell_drift = F.interpolate(
+        drift * weights, cells, mode="area"
+    ) / cell_weights.clamp(min=1e-6)
+    drift = F.interpolate(
+        fill_in(cell_drift, cell_weights), drift.shape[2:], mode="bilinear"
     )
 
-    return kept_image
+    fixed_image = image.copy()
+    fixed_image.paste(
+        VaeImageProcessor.numpy_to_pil(
+            VaeImageProcessor.pt_to_numpy((regenerated - drift).clamp(0, 1))
+        )[0],
+        box[:2],
+    )
+
+    return fixed_image
+
+
+def fill_in(values: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
+    """Fill in values, shaped (1, channels, height, width), where their weights,
+    shaped (1, 1, height, width), from 0 to 1, are low, smoothly, from where they
+    are high: values are averaged at half size, filled in there, then spread back
+    where they are missing.
+    """
+    height, width = weights.shape[2:]
+
+    if weights.min() > 0 or (height, width) == (1, 1):
+        return values
+
+    half_size = (max(height // 2, 1), max(width // 2, 1))
+    half_weights = F.interpolate(weights, half_size, mode="area")
+    half_values = F.interpolate(
+        values * weights, half_size, mode="area"
+    ) / half_weights.clamp(min=1e-6)
+    filled = F.interpolate(
+        fill_in(half_values, half_weights), (height, width), mode="bilinear"
+    )
+
+    return values * weights + filled * (1 - weights)
