@@ -44,8 +44,9 @@ Once automatic setup is done:
 
 ZPix sets up the Python environment and packages for you.
 
-### Eight models
+### Nine models
 
+- FLUX.1 [dev]
 - Z-Image Turbo
 - FLUX.2 [klein] 4B
 - Anima Turbo
@@ -104,6 +105,7 @@ Please get to [FAQ page](https://github.com/SamuelTallet/ZPix/blob/main/docs/FAQ
 ## Credits
 
 Base models:
+- [FLUX.1-dev](https://huggingface.co/black-forest-labs/FLUX.1-dev) by Black Forest Labs
 - [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) by Tongyi-MAI
 - [FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B) by Black Forest Labs
 - [Anima](https://huggingface.co/circlestone-labs/Anima) by CircleStone Labs, built on [NVIDIA Cosmos](https://github.com/nvidia-cosmos)
@@ -115,6 +117,7 @@ Adapters:
 - [Pruna-Qwen-Image-2.1](https://huggingface.co/PrunaAI/Pruna-Qwen-Image-2.1) by Pruna AI
 
 Quantized models:
+- [FLUX.1-dev-SDNQ-uint4-svd-r32](https://huggingface.co/Disty0/FLUX.1-dev-SDNQ-uint4-svd-r32) by Disty0
 - [Z-Image-Turbo-SDNQ-uint4-svd-r32](https://huggingface.co/Disty0/Z-Image-Turbo-SDNQ-uint4-svd-r32) by Disty0
 - [FLUX.2-klein-4B-SDNQ-4bit-dynamic](https://huggingface.co/Disty0/FLUX.2-klein-4B-SDNQ-4bit-dynamic) by Disty0
 - [Anima-base-v1.0_sdnq_dynamic_8bit](https://huggingface.co/OzzyGT/Anima-base-v1.0_sdnq_dynamic_8bit) by OzzyGT

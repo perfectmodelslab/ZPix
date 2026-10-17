@@ -52,6 +52,7 @@ class ImageModel(BaseModel):
         """Does this model's family support inpainting?"""
         return self.family in (
             "Anima",
+            "FLUX",
             "FLUX.2",
             "Krea 2",
             "Qwen-Image 2.1",

@@ -162,9 +162,10 @@ def generate(
     else:
         # Standard pipelines take CFG as a call argument, named after what the
         # family scales, and refuse the one they don't declare.
+        # Some models declare both, but were distilled to scale `guidance_scale`.
         call_params = signature(type(pipe).__call__).parameters
         cfg_argument = (
-            "true_cfg_scale" if "true_cfg_scale" in call_params else "guidance_scale"
+            "guidance_scale" if "guidance_scale" in call_params else "true_cfg_scale"
         )
         pipe_kwargs[cfg_argument] = float(cfg)
 

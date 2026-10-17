@@ -1,9 +1,11 @@
 """Regional Edits: regenerate the region of an image drawn with a lasso tool."""
 
+from inspect import signature
 from math import ceil
 
 import gradio as gr
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
+from diffusers.pipelines.flux.pipeline_flux_inpaint import FluxInpaintPipeline
 from diffusers.pipelines.flux2.pipeline_flux2_klein_inpaint import (
     Flux2KleinInpaintPipeline,
 )
@@ -21,6 +23,7 @@ from source.py.qwen21_inpaint import create_qwen21_inpaint_pipe
 
 INPAINT_PIPELINES: dict[str, tuple[type[DiffusionPipeline], int]] = {
     "Z-Image": (ZImageInpaintPipeline, 0),
+    "FLUX": (FluxInpaintPipeline, 0),
     # Appends the source image to the stream, as a reference.
     "FLUX.2": (Flux2KleinInpaintPipeline, 1),
 }
@@ -117,9 +120,15 @@ def create_inpaint_pipe(
         return create_qwen21_inpaint_pipe(pipe), 0
 
     pipeline_class, references = INPAINT_PIPELINES[family]
-    names = ("scheduler", "vae", "text_encoder", "tokenizer", "transformer")
+    # Only those the pipeline takes: a modular one holds others, e.g. a guider.
+    accepted = signature(pipeline_class.__init__).parameters
+    components = {
+        name: component
+        for name, component in pipe.components.items()
+        if name in accepted
+    }
 
-    return pipeline_class(**{name: pipe.components[name] for name in names}), references
+    return pipeline_class(**components), references
 
 
 def get_inpaint_size(inpaint_source: Image.Image, family: str) -> tuple[int, int]:

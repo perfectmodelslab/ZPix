@@ -1,5 +1,17 @@
 [
     {
+        "id": "Disty0/FLUX.1-dev-SDNQ-uint4-svd-r32",
+        "backup_id": null,
+        "name": "FLUX.1 [dev]",
+        "family": "FLUX",
+        "default": {
+            "steps": 50,
+            "cfg": 3.5,
+            "inpaint_strength_ratio": 1.0
+        },
+        "features": ["text-to-image", "image-to-image"]
+    },
+    {
         "id": "Disty0/Z-Image-Turbo-SDNQ-uint4-svd-r32",
         "backup_id": "SamuelTallet/Z-Image-Turbo-SDNQ-uint4-svd-r32",
         "name": "Z-Image Turbo",
