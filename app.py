@@ -49,6 +49,7 @@ from source.py.ref_images import (
 )
 from source.py.regional_edits import (
     get_inpaint_steps,
+    get_inpaint_strength_ratio,
     sync_inpaint_steps,
     sync_ui_to_inpainting_mode,
 )
@@ -346,7 +347,7 @@ if __name__ == "__main__":
                         maximum=initial_model.default.steps,
                         step=1,
                         value=get_inpaint_steps(
-                            initial_model.default.inpaint_strength_ratio,
+                            get_inpaint_strength_ratio(image_pipe),
                             initial_model.default.steps,
                         ),
                     )
@@ -550,8 +551,8 @@ if __name__ == "__main__":
                             step=1,
                         )
                         steps.change(
-                            sync_inpaint_steps,
-                            inputs=[model, steps],
+                            lambda steps: sync_inpaint_steps(image_pipe, steps),
+                            inputs=steps,
                             outputs=inpaint_steps,
                             show_progress="hidden",
                         )
@@ -685,7 +686,7 @@ if __name__ == "__main__":
                         show_ref_image_strength(image_pipe, ref_images),
                         gr.update(value=image_model.default.steps),
                         gr.update(value=image_model.default.cfg),
-                        sync_inpaint_steps(image_model, image_model.default.steps),
+                        sync_inpaint_steps(image_pipe, image_model.default.steps),
                     ),
                     inputs=[model, reference_images],
                     outputs=[

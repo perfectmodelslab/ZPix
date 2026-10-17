@@ -6,8 +6,7 @@
         "family": "FLUX",
         "default": {
             "steps": 50,
-            "cfg": 3.5,
-            "inpaint_strength_ratio": 1.0
+            "cfg": 3.5
         }
     },
     {
@@ -17,8 +16,7 @@
         "family": "Z-Image",
         "default": {
             "steps": 8,
-            "cfg": 0.0,
-            "inpaint_strength_ratio": 0.625
+            "cfg": 0.0
         }
     },
     {
@@ -28,8 +26,7 @@
         "family": "FLUX.2",
         "default": {
             "steps": 4,
-            "cfg": 1.0,
-            "inpaint_strength_ratio": 1.0
+            "cfg": 1.0
         }
     },
     {
@@ -39,8 +36,7 @@
         "family": "FLUX.2",
         "default": {
             "steps": 4,
-            "cfg": 1.0,
-            "inpaint_strength_ratio": 1.0
+            "cfg": 1.0
         }
     },
     {
@@ -50,8 +46,7 @@
         "family": "Anima",
         "default": {
             "steps": 8,
-            "cfg": 1.0,
-            "inpaint_strength_ratio": 0.375
+            "cfg": 1.0
         }
     },
     {
@@ -61,8 +56,7 @@
         "family": "Anima",
         "default": {
             "steps": 30,
-            "cfg": 4.0,
-            "inpaint_strength_ratio": 0.4
+            "cfg": 4.0
         }
     },
     {
@@ -72,8 +66,7 @@
         "family": "Krea 2",
         "default": {
             "steps": 8,
-            "cfg": 0.0,
-            "inpaint_strength_ratio": 0.5
+            "cfg": 0.0
         }
     },
     {
@@ -83,8 +76,7 @@
         "family": "Qwen-Image 2.1",
         "default": {
             "steps": 8,
-            "cfg": 1.0,
-            "inpaint_strength_ratio": 0.625
+            "cfg": 1.0
         }
     },
     {
@@ -94,8 +86,7 @@
         "family": "Qwen-Image 2.1",
         "default": {
             "steps": 8,
-            "cfg": 0.0,
-            "inpaint_strength_ratio": 0.625
+            "cfg": 0.0
         }
     },
     {
@@ -105,8 +96,7 @@
         "family": "Qwen-Image 2.1",
         "default": {
             "steps": 40,
-            "cfg": 0.0,
-            "inpaint_strength_ratio": 0.6
+            "cfg": 0.0
         }
     }
 ]

@@ -10,9 +10,6 @@ class Settings(BaseModel):
     cfg: float
     """Classifier-free guidance scale."""
 
-    inpaint_strength_ratio: float = 1.0
-    """Inpainting strength ratio."""
-
 
 class ImageModel(BaseModel):
     """An image model."""

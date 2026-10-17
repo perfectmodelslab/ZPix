@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from source.py.anima_inpaint import create_anima_inpaint_pipe
 from source.py.image_model import ImageModel
+from source.py.image_pipe import ImagePipeline
 from source.py.image_utilities import to_rgb
 from source.py.krea2_inpaint import create_krea2_inpaint_pipe
 from source.py.qwen21_inpaint import create_qwen21_inpaint_pipe
@@ -51,8 +52,21 @@ def get_inpaint_steps(strength: float, steps: int) -> int:
     return min(max(ceil(strength * steps - 1e-6), 1), steps)
 
 
-def sync_inpaint_steps(model: ImageModel, steps: int) -> dict:
-    """Synchronize inpainting steps slider to steps, at model's strength."""
+def get_inpaint_strength_ratio(pipe: ImagePipeline) -> float:
+    """Get the default inpainting strength ratio of the loaded pipeline.
+
+    Returns:
+        0.5 for strength-based pipelines (e.g. Anima, Z-Image), 1.0 for models
+        capable of global edits (e.g. FLUX.2 [klein], Qwen-Image 2.1), which
+        regenerate the region from scratch, guided by its context.
+    """
+    return 0.5 if pipe.supports_strength() else 1.0
+
+
+def sync_inpaint_steps(pipe: ImagePipeline, steps: int) -> dict:
+    """Synchronize inpainting steps slider to steps, at pipeline's inpainting
+    strength ratio.
+    """
     steps = int(steps)
 
     return gr.update(
@@ -60,7 +74,7 @@ def sync_inpaint_steps(model: ImageModel, steps: int) -> dict:
         # goes down to 0, which denoises one step anyway.
         minimum=min(1, steps - 1),
         maximum=steps,
-        value=get_inpaint_steps(model.default.inpaint_strength_ratio, steps),
+        value=get_inpaint_steps(get_inpaint_strength_ratio(pipe), steps),
     )
 
 
