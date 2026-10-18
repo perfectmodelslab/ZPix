@@ -137,8 +137,9 @@ def create_inpaint_pipe(
     if family == "Krea 2":
         return create_krea2_inpaint_pipe(pipe), 0
 
+    # Appends the source image to the stream, as a condition image.
     if family == "Qwen-Image 2.1":
-        return create_qwen21_inpaint_pipe(pipe), 0
+        return create_qwen21_inpaint_pipe(pipe), 1
 
     pipeline_class, references = INPAINT_PIPELINES[family]
     # Only those the pipeline takes: a modular one holds others, e.g. a guider.
@@ -213,6 +214,10 @@ def keep_outside_region(
     # Generated at the size given by get_inpaint_size.
     if image.size != inpaint_source.size:
         image = image.resize(inpaint_source.size, Image.Resampling.LANCZOS)
+
+    # Some VAEs decode an alpha channel too (e.g. Qwen-Image 2.1's).
+    if image.mode != inpaint_source.mode:
+        image = image.convert(inpaint_source.mode)
 
     lasso_mask = lasso_to_mask(lasso, inpaint_source.size)
     spill_mask = grow_lasso_mask(lasso, lasso_mask, LATENT_CELL)

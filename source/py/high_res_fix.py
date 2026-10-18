@@ -86,6 +86,11 @@ def high_res_fix(
         region.resize(high_res_size, Image.Resampling.LANCZOS),
         region_mask.resize(high_res_size, Image.Resampling.LANCZOS),
     ).resize(region.size, Image.Resampling.LANCZOS)
+
+    # Some VAEs decode an alpha channel too (e.g. Qwen-Image 2.1's).
+    if fixed_region.mode != region.mode:
+        fixed_region = fixed_region.convert(region.mode)
+
     fixed_region = keep_tone(region, fixed_region)
 
     # Feathered, so no seam shows along the region.

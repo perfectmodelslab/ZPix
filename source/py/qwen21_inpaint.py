@@ -1,10 +1,11 @@
 """Qwen-Image 2.1 inpainting, on top of the Diffusers Qwen-Image 2.1 pipeline.
 
 Diffusers ships Qwen-Image 2.1 as text-to-image and edit only. Inpainting here
-is text-to-image started from the source image, noised as much as strength
+is an edit conditioned on the source image, so the model sees the region's
+context clean, started from the source image, noised as much as strength
 spares, whose latents outside the mask are reset, after each step, to the
 source image noised to the next step's level, as Diffusers does for Qwen-Image.
-The transformer never sees the mask, nor the source image as a condition.
+The transformer never sees the mask.
 """
 
 from collections.abc import Callable
@@ -108,7 +109,7 @@ class QwenImage21InpaintPipeline(QwenImage21Pipeline):
         """Regenerate the masked region of an image.
 
         Args:
-            image: Source image.
+            image: Source image, also read as a condition image.
             mask_image: Mask image, white where to regenerate.
             strength: How much of the masked region to regenerate. At 1, it is
                 regenerated from scratch, guided by its context.
@@ -139,6 +140,11 @@ class QwenImage21InpaintPipeline(QwenImage21Pipeline):
             width,
             generator,
         )
+
+        # As the stock pipeline: distilled models (e.g. Turbo) only fully denoise
+        # along the sigmas their author configured.
+        if sigmas is None:
+            sigmas = self.config.sample_sigmas
 
         # Skip the first steps, as much as strength spares. The scheduler shifts
         # the remaining sigmas as it would the whole schedule.
@@ -196,6 +202,7 @@ class QwenImage21InpaintPipeline(QwenImage21Pipeline):
 
         return super().__call__(
             prompt=prompt,
+            image=image,
             true_cfg_scale=true_cfg_scale,
             height=height,
             width=width,
@@ -221,4 +228,7 @@ def create_qwen21_inpaint_pipe(
     It shares the loaded components (LoRA and attention processors included),
     so no weights load twice.
     """
-    return QwenImage21InpaintPipeline(**pipe.components)
+    # Components leave out the optional sigmas the model author configured.
+    return QwenImage21InpaintPipeline(
+        **pipe.components, sample_sigmas=pipe.config.sample_sigmas
+    )
