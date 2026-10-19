@@ -212,6 +212,8 @@ class Canvas(Component):
         exit_fullscreen_tooltip: str = "Exit fullscreen mode (F)",
         caption_key: str | None = None,
         placeholder: str | None = None,
+        max_zoom_levels: int = 24,
+        pan_tooltip: str = "Space+drag: pan",
         label: str | None = None,
         show_label: bool | None = None,
         height: int | str | None = None,
@@ -237,6 +239,8 @@ class Canvas(Component):
             exit_fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas is fullscreen.
             caption_key: if provided, the text of the base layer image info (e.g. a PNG text chunk) at this key is shown as tooltip of the document thumbnail.
             placeholder: text shown in the canvas while it has no document, e.g. to tell user how to add one.
+            max_zoom_levels: how many levels the mouse wheel can zoom the displayed document in, from its size fitting the canvas, which is the smallest. Three levels double the size. 0 disables zoom.
+            pan_tooltip: hint at how to pan the zoomed document, shown for a while as user zooms in. Empty to show none.
             label: the label for this component, displayed at the top left of the canvas.
             show_label: if True, will display label.
             height: the height of the canvas, in pixels if a number, or as a CSS size.
@@ -259,6 +263,8 @@ class Canvas(Component):
         self.exit_fullscreen_tooltip = exit_fullscreen_tooltip
         self.caption_key = caption_key
         self.placeholder = placeholder
+        self.max_zoom_levels = max_zoom_levels
+        self.pan_tooltip = pan_tooltip
         self.height = height
 
         super().__init__(

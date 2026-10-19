@@ -199,6 +199,9 @@ export class LassoOverlay extends HTMLElement {
 	 */
 	area: HTMLElement | null = null;
 
+	/** Element image shows in, letterbox bands included, which take clicks while drawing. Null for the parent. */
+	bands: HTMLElement | null = null;
+
 	/** Neighbors each vertex of freehand segments is averaged with on each side, to smooth the hand's jitter. */
 	smoothing = 1;
 
@@ -311,7 +314,8 @@ export class LassoOverlay extends HTMLElement {
 	/** Clicks on letterbox bands add vertices too while drawing, clamped to image. */
 	#on_window_pointerdown = (event: PointerEvent): void => {
 		const target = event.target as Node | null;
-		if (this.#drawing && target !== this && this.parentElement?.contains(target)) {
+		const bands = this.bands ?? this.parentElement;
+		if (this.#drawing && target !== this && bands?.contains(target)) {
 			this.#on_pointerdown(event);
 		}
 	};
@@ -1019,7 +1023,8 @@ export class LassoOverlay extends HTMLElement {
 
 		this.style.cursor = cursor;
 		// Over letterbox bands too, which take clicks while drawing.
-		if (this.parentElement) this.parentElement.style.cursor = this.#drawing ? cursor : "";
+		const bands = this.bands ?? this.parentElement;
+		if (bands) bands.style.cursor = this.#drawing ? cursor : "";
 	}
 
 	/** Whether pointer left the area lasso is drawn within. */

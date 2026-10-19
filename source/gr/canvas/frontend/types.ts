@@ -24,6 +24,8 @@ export interface CanvasProps {
 	fullscreen_tooltip: string;
 	exit_fullscreen_tooltip: string;
 	placeholder: string | null;
+	max_zoom_levels: number;
+	pan_tooltip: string;
 	height: number | string | null;
 }
 

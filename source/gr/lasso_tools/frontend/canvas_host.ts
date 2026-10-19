@@ -9,7 +9,8 @@ export const REQUEST_EVENT = "canvas-host-request";
 /** Emits "tool-change" as user selects a tool. */
 export interface CanvasHost extends EventTarget {
 	readonly id: number;
-	readonly stage: HTMLElement;
+	readonly doc_el: HTMLElement;
+	readonly frame: HTMLElement;
 	readonly image: HTMLImageElement;
 	readonly area: HTMLElement;
 	/** Tool IDs by group, in the order tools were given to canvas. */

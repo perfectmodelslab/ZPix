@@ -780,6 +780,7 @@ if __name__ == "__main__":
                     placeholder=t("Drop an image or generate one with a prompt"),
                     fullscreen_tooltip=t("Go fullscreen (F)"),
                     exit_fullscreen_tooltip=t("Exit fullscreen mode (F)"),
+                    pan_tooltip=t("Space+drag: pan"),
                     height="86vh",
                     elem_id="canvas",
                 )

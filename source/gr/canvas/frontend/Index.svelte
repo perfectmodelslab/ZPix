@@ -44,7 +44,8 @@
 	let internal_drag = false;
 
 	let area: HTMLElement;
-	let stage: HTMLElement;
+	let frame: HTMLElement;
+	let doc_el: HTMLElement;
 	let image: HTMLImageElement;
 	/** One per tool group. */
 	const toolbars: HTMLElement[] = [];
@@ -164,24 +165,38 @@
 		select(move);
 	}
 
-	let wheel_delta = 0;
+	/**
+	 * Counter of vertical wheel notches, one per notch even on touchpads: gives
+	 * 1 (down) or -1 (up) once deltas add up to a notch, else 0.
+	 */
+	function notch_counter(): (event: WheelEvent) => number {
+		let total = 0;
 
-	/** Vertical wheel steps through documents, one per notch even on touchpads. */
+		return (event) => {
+			// Line-based deltas (Firefox) to pixels; direction change restarts.
+			const delta =
+				event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * 40;
+			if (Math.sign(delta) !== Math.sign(total)) total = 0;
+			total += delta;
+			if (Math.abs(total) < 50) return 0;
+
+			const notch = Math.sign(total);
+			total = 0;
+			return notch;
+		};
+	}
+
+	const thumbs_notch = notch_counter();
+
+	/** Vertical wheel steps through documents. */
 	function on_thumbs_wheel(event: WheelEvent): void {
 		if (value.index === null || event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
 			return;
 		}
 		event.preventDefault();
 
-		// Line-based deltas (Firefox) to pixels; direction change restarts.
-		const delta = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * 40;
-		if (Math.sign(delta) !== Math.sign(wheel_delta)) wheel_delta = 0;
-		wheel_delta += delta;
-		if (Math.abs(wheel_delta) < 50) return;
-
-		const offset = Math.sign(wheel_delta);
-		wheel_delta = 0;
-		step(offset);
+		const notch = thumbs_notch(event);
+		if (notch) step(notch);
 	}
 
 	/** Display the previous (-1) or next (1) document, if any. */
@@ -190,8 +205,241 @@
 		select(Math.min(value.docs.length - 1, Math.max(0, value.index + offset)));
 	}
 
+	/** Zoom factor between levels: three levels double the size. */
+	const ZOOM_STEP = 2 ** (1 / 3);
+
+	let frame_width = $state(0);
+	let frame_height = $state(0);
+	const frame_size = $derived([frame_width, frame_height]);
+	/** Natural size of the base layer, once loaded. */
+	let natural: { width: number; height: number } | null = $state(null);
+	/** 0 fits the image to the frame. */
+	let zoom_level = $state(0);
+	/** Image point at the frame center, in fractions of the image size. */
+	let zoom_center: [number, number] = $state([0.5, 0.5]);
+
+	const zoom_notch = notch_counter();
+
+	/** Image content size at a zoom level: fitted in the frame size scaled to it, letterbox bands excluded. */
+	function zoomed_content(level: number): [number, number] {
+		const scale = ZOOM_STEP ** level;
+		const width = frame_width * scale;
+		const height = frame_height * scale;
+		if (!natural) return [width, height];
+
+		// As `object-fit: contain` does.
+		const fit = Math.min(width / natural.width, height / natural.height);
+		return [natural.width * fit, natural.height * fit];
+	}
+
+	/**
+	 * Start of image content along an axis of the frame, around a center
+	 * point: content smaller than the frame is centered, else it covers it.
+	 */
+	function content_start(size: number, content: number, center: number): number {
+		if (content <= size) return (size - content) / 2;
+		return Math.min(0, Math.max(size - content, size / 2 - center * content));
+	}
+
+	/** Center as content bounds allow at a zoom level: see `content_start`. */
+	function bounded_center(level: number, center: [number, number]): [number, number] {
+		const content = zoomed_content(level);
+
+		return [0, 1].map((axis) => {
+			const size = frame_size[axis];
+			return (size / 2 - content_start(size, content[axis], center[axis])) / content[axis];
+		}) as [number, number];
+	}
+
+	/**
+	 * Document element position and size in the frame: image content's,
+	 * letterbox bands excluded, for the pointer over it to be over the image.
+	 * Null until image size is known: the element then fills the frame.
+	 */
+	const doc_rect = $derived.by(() => {
+		if (!natural) return null;
+
+		const content = zoomed_content(zoom_level);
+		const [left, top] = [0, 1].map((axis) =>
+			content_start(frame_size[axis], content[axis], zoom_center[axis])
+		);
+
+		return { left, top, width: content[0], height: content[1] };
+	});
+
+	/**
+	 * Whether image pixels show unsmoothed: only once zoomed in, and larger
+	 * than device pixels, else they'd alias. Fitted, an upscaled image stays smooth.
+	 */
+	const pixelated = $derived(
+		zoom_level > 0 &&
+			!!natural &&
+			zoomed_content(zoom_level)[0] * devicePixelRatio >= natural.width
+	);
+
+	// Once canvas is empty, the next document shows fitted.
+	$effect(() => {
+		if (!doc) zoom_level = 0;
+	});
+
+	/** Wheel over the document zooms it, keeping the point under pointer in place. */
+	function on_frame_wheel(event: WheelEvent): void {
+		const max = gradio.props.max_zoom_levels ?? 0;
+		if (!doc || max <= 0 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+		event.preventDefault();
+
+		const level = Math.min(max, Math.max(0, zoom_level - zoom_notch(event)));
+		if (level === zoom_level) return;
+
+		const rect = frame.getBoundingClientRect();
+		const pointer = [event.clientX - rect.left, event.clientY - rect.top];
+		const before = zoomed_content(zoom_level);
+		const after = zoomed_content(level);
+
+		zoom_center = bounded_center(
+			level,
+			[0, 1].map((axis) => {
+				const size = frame_size[axis];
+				// Image point under pointer, in fractions of the image size.
+				const point =
+					(pointer[axis] - content_start(size, before[axis], zoom_center[axis])) / before[axis];
+				return point + (size / 2 - pointer[axis]) / after[axis];
+			}) as [number, number]
+		);
+		zoom_level = level;
+	}
+
+	function on_image_load(): void {
+		natural = { width: image.naturalWidth, height: image.naturalHeight };
+	}
+
+	/** Whether the pan hint shows: for a while as user zooms in. */
+	let zoom_hint = $state(false);
+
+	$effect(() => {
+		if (!zoom_level) return;
+
+		zoom_hint = true;
+		const timer = setTimeout(() => (zoom_hint = false), 2500);
+		return () => {
+			clearTimeout(timer);
+			zoom_hint = false;
+		};
+	});
+
+	/**
+	 * Lucide icon as cursor, outlined and filled in white to show on any image.
+	 * Its strokes are open, so its silhouette, a closed outline, is filled.
+	 */
+	function icon_cursor(icon: string, silhouette: string, fallback: string): string {
+		const svg =
+			'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="-3.5 -3.5 31 31" ' +
+			'fill="none" stroke-linecap="round" stroke-linejoin="round">' +
+			`<g stroke="white" stroke-width="4">${icon}</g>` +
+			`<path fill="white" d="${silhouette}"/>` +
+			`<g stroke="black" stroke-width="2">${icon}</g></svg>`;
+		return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 12 12, ${fallback}`;
+	}
+
+	/** Lucide "hand" and "hand-grab". */
+	const HAND_CURSOR = icon_cursor(
+		'<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/>' +
+			'<path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/>' +
+			'<path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/>' +
+			'<path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+		"M6 14V6a2 2 0 0 1 4 0V4a2 2 0 0 1 4 0v2a2 2 0 0 1 4 0v2a2 2 0 0 1 4 0v6" +
+			"a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82Z",
+		"grab"
+	);
+	const HAND_GRAB_CURSOR = icon_cursor(
+		'<path d="M18 11.5V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1.4"/>' +
+			'<path d="M14 10V8a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/>' +
+			'<path d="M10 9.9V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v5"/>' +
+			'<path d="M6 14a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/>' +
+			'<path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 2 2 0 1 1 4 0"/>',
+		"M2 14a2 2 0 0 1 4 0V9a2 2 0 0 1 4 0V8a2 2 0 0 1 4 0v1a2 2 0 0 1 4 0v2a2 2 0 0 1 4 0v3" +
+			"a8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8Z",
+		"grabbing"
+	);
+
+	let space_held = $state(false);
+	/** Ongoing pan: its pointer, and where pointer and zoom center were at start. */
+	let pan: { id: number; client: [number, number]; center: [number, number] } | null =
+		$state(null);
+	const pan_cursor = $derived(
+		pan ? HAND_GRAB_CURSOR : space_held && zoom_level ? HAND_CURSOR : null
+	);
+
+	/** Space held over the displayed document, letterbox bands included, zoomed in or not. */
+	function on_window_keydown(event: KeyboardEvent): void {
+		if (
+			event.code !== "Space" ||
+			event.altKey ||
+			event.ctrlKey ||
+			event.metaKey ||
+			!frame.matches(":hover")
+		) {
+			return;
+		}
+
+		// Else page scrolls, or a focused text field or button gets it.
+		event.preventDefault();
+		space_held = true;
+	}
+
+	function on_window_keyup(event: KeyboardEvent): void {
+		if (event.code !== "Space" || !space_held) return;
+
+		event.preventDefault();
+		space_held = false;
+	}
+
+	/** Captured, so that tools, e.g. a lasso, don't get the press of a pan. Pans start from the image only. */
+	function on_frame_pointerdown(event: PointerEvent): void {
+		if (
+			!space_held ||
+			!zoom_level ||
+			event.button !== 0 ||
+			!doc_el.contains(event.target as Node | null)
+		) {
+			return;
+		}
+		event.preventDefault();
+		event.stopPropagation();
+
+		frame.setPointerCapture(event.pointerId);
+		pan = {
+			id: event.pointerId,
+			client: [event.clientX, event.clientY],
+			center: bounded_center(zoom_level, zoom_center)
+		};
+	}
+
+	function on_frame_pointermove(event: PointerEvent): void {
+		if (event.pointerId !== pan?.id) return;
+
+		const { client, center } = pan;
+		const content = zoomed_content(zoom_level);
+		const moved = [event.clientX - client[0], event.clientY - client[1]];
+
+		zoom_center = bounded_center(
+			zoom_level,
+			[0, 1].map((axis) => center[axis] - moved[axis] / content[axis]) as [number, number]
+		);
+	}
+
+	function end_pan(event: PointerEvent): void {
+		if (event.pointerId === pan?.id) pan = null;
+	}
+
 	/** Carry the image URL along a drag of an image, which Firefox doesn't. */
 	function on_dragstart(event: DragEvent): void {
+		// With Space held, a drag pans instead.
+		if (pan_cursor) {
+			event.preventDefault();
+			return;
+		}
+
 		const target = event.target;
 		if (!(target instanceof HTMLImageElement) || !event.dataTransfer) return;
 
@@ -279,7 +527,8 @@
 	onMount(() => {
 		const host = new CanvasHost(
 			gradio.shared.id,
-			stage,
+			doc_el,
+			frame,
 			image,
 			area,
 			toolbars,
@@ -301,6 +550,12 @@
 		return () => window.removeEventListener(REQUEST_EVENT, on_request);
 	});
 </script>
+
+<svelte:window
+	onkeydown={on_window_keydown}
+	onkeyup={on_window_keyup}
+	onblur={() => (space_held = false)}
+/>
 
 <Block
 	visible={gradio.shared.visible}
@@ -331,6 +586,8 @@
 	<div
 		class="canvas"
 		class:drag-over={drag_over}
+		class:panning={!!pan}
+		style:cursor={pan ? pan_cursor : undefined}
 		bind:this={area}
 		role="group"
 		aria-label={gradio.shared.label}
@@ -342,22 +599,49 @@
 	>
 		<!-- Inset on both sides, to keep the image centered and clear of buttons. -->
 		<div
-			class="stage"
+			class="frame"
 			class:hidden={!doc}
 			style:margin-inline={buttons_width
 				? `calc(${buttons_width}px + var(--spacing-lg))`
 				: undefined}
-			bind:this={stage}
+			bind:this={frame}
+			bind:clientWidth={frame_width}
+			bind:clientHeight={frame_height}
+			onwheel={on_frame_wheel}
+			onpointerdowncapture={on_frame_pointerdown}
+			onpointermove={on_frame_pointermove}
+			onpointerup={end_pan}
+			onpointercancel={end_pan}
 		>
-			<img
-				class="layer"
-				bind:this={image}
-				src={doc?.layers[0].object.url}
-				alt=""
-			/>
-			{#each doc?.layers.slice(1) ?? [] as layer}
-				<img class="layer" src={layer.object.url} alt="" />
-			{/each}
+			<!-- Resized rather than scaled by zoom, for tool overlays to follow. -->
+			<div
+				class="doc"
+				class:pixelated
+				class:panning={!!pan_cursor}
+				style:cursor={pan_cursor}
+				style:left={doc_rect && `${doc_rect.left}px`}
+				style:top={doc_rect && `${doc_rect.top}px`}
+				style:width={doc_rect && `${doc_rect.width}px`}
+				style:height={doc_rect && `${doc_rect.height}px`}
+				bind:this={doc_el}
+			>
+				<img
+					class="layer"
+					bind:this={image}
+					src={doc?.layers[0].object.url}
+					alt=""
+					onload={on_image_load}
+				/>
+				{#each doc?.layers.slice(1) ?? [] as layer}
+					<img class="layer" src={layer.object.url} alt="" />
+				{/each}
+			</div>
+
+			{#if zoom_hint && gradio.props.pan_tooltip}
+				<div class="zoom-hint">
+					{gradio.props.pan_tooltip}
+				</div>
+			{/if}
 		</div>
 
 		{#if !doc}
@@ -461,14 +745,56 @@
 		outline-offset: -1px;
 	}
 
-	.stage {
+	.frame {
 		position: relative;
 		flex: 1;
 		min-height: 0;
+		overflow: clip;
 	}
 
-	.stage.hidden {
+	.frame.hidden {
 		display: none;
+	}
+
+	/* Fills the frame until image size is known: see `doc_rect`. */
+	.doc {
+		position: absolute;
+		inset: 0;
+	}
+
+	.doc.pixelated .layer {
+		image-rendering: pixelated;
+	}
+
+	/* Pan cursor, set inline on the document element, or on the whole canvas
+	   while panning, wins over the cursors of tools in it, e.g. a lasso.
+	   Not set through a custom property: Chromium would then reload its image
+	   on each style recalc, showing the fallback cursor meanwhile. */
+	.panning :global(*) {
+		cursor: inherit !important;
+	}
+
+	.zoom-hint {
+		position: absolute;
+		bottom: var(--spacing-lg);
+		left: 50%;
+		z-index: var(--layer-2);
+		transform: translateX(-50%);
+		border: 2px solid black;
+		background: var(--block-background-fill);
+		box-shadow: var(--shadow-drop);
+		padding: 7px;
+		color: var(--body-text-color);
+		font-size: var(--text-sm);
+		line-height: 1;
+		/* Else font ascent and descent offset text vertically. */
+		text-box: trim-both cap alphabetic;
+		white-space: nowrap;
+		pointer-events: none;
+	}
+
+	:global(.dark) .zoom-hint {
+		border-color: white;
 	}
 
 	.layer {

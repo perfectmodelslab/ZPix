@@ -22,8 +22,14 @@ export class CanvasHost extends EventTarget {
 	constructor(
 		/** Canvas ID. */
 		readonly id: number,
-		/** Positioned element holding the displayed document: overlays go in it. */
-		readonly stage: HTMLElement,
+		/**
+		 * Positioned element holding the displayed document, sized to its image,
+		 * letterbox bands excluded: overlays go in it. Zoom resizes it and moves
+		 * it within `frame`.
+		 */
+		readonly doc_el: HTMLElement,
+		/** Clipping parent of `doc_el`, the space the document shows in, letterbox bands included. */
+		readonly frame: HTMLElement,
 		/** Base layer of the displayed document, without `src` if none. */
 		readonly image: HTMLImageElement,
 		/** Canvas area: a drag leaving it goes to another element. */

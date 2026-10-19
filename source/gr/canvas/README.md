@@ -53,7 +53,7 @@ Events of a document pass a `DocEvent` to a listener argument annotated with it:
 
 ## User interface
 
-- The displayed document fits the canvas. A drag of it, or of a thumbnail, drops its image onto another element that accepts drops, as its URL (`text/uri-list`).
+- The displayed document fits the canvas. The mouse wheel over it zooms in on the pointer, up to `max_zoom_levels` levels, and back out to the fitting size. Zoomed in, a drag with <kbd>Space</kbd> held pans it, as `pan_tooltip` tells for a while. <kbd>Space</kbd> pressed over it, zoomed in or not, goes to no other element, e.g. a focused button. Image pixels show unsmoothed once larger than device pixels. A drag of it, or of a thumbnail, drops its image onto another element that accepts drops, as its URL (`text/uri-list`).
 - Thumbnails follow the displayed document. A click displays a document, and so do <kbd>←</kbd>, <kbd>→</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> while a thumbnail has focus.
 - Images dropped from outside (e.g. files) are added, the last one displayed, unless `interactive` is False.
 - `buttons` are at the top left, and tool buttons in a column below: `"fullscreen"` toggles fullscreen, as does the F key.

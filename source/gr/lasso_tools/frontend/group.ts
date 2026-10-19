@@ -86,8 +86,9 @@ export class LassoGroup {
 
 	private constructor(readonly host: CanvasHost) {
 		this.overlay = document.createElement(OVERLAY_TAG) as LassoOverlay;
-		host.stage.append(this.overlay);
+		host.doc_el.append(this.overlay);
 		this.overlay.area = host.area;
+		this.overlay.bands = host.frame;
 		this.overlay.target = host.image;
 
 		this.overlay.addEventListener("lasso-change", (event) => {
