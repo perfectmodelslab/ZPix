@@ -76,6 +76,11 @@ Requires Node.js 24.
 Both tools share the frontend: Gradio serves the one next to a component module. They only set `POLYGONAL`, which tells it how user draws: the rest is in `LassoTool`.
 
 - `build.ps1 -Target grc` (at project root) builds the wheel ZPix installs from `wheels` directory. Rebuild after any component change.
-- `dev.ps1` runs the hot reload demo.
+- The hot reload demo runs from project root, in PowerShell:
+
+  ```powershell
+  $env:GRADIO_ANALYTICS_ENABLED = "False"
+  .venv\Scripts\gradio.exe cc dev source\gr\lasso_tools\demo\app.py --component-directory source\gr\lasso_tools
+  ```
 
 On Gradio update, pin `svelte` in `frontend/package.json` to the version Gradio's frontend uses, then rebuild the wheel.

@@ -68,6 +68,11 @@ Events of a document pass a `DocEvent` to a listener argument annotated with it:
 Requires Node.js 24.
 
 - `build.ps1 -Target grc` (at project root) builds the wheel ZPix installs from `wheels` directory. Rebuild after any component change.
-- `dev.ps1` runs the hot reload demo.
+- The hot reload demo runs from project root, in PowerShell:
+
+  ```powershell
+  $env:GRADIO_ANALYTICS_ENABLED = "False"
+  .venv\Scripts\gradio.exe cc dev source\gr\canvas\demo\app.py --component-directory source\gr\canvas
+  ```
 
 On Gradio update, pin `svelte` in `frontend/package.json` to the version Gradio's frontend uses, then rebuild the wheel.
