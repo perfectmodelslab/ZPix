@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { Lasso } from "./lasso";
+	import type { Selection } from "./selection";
 
-	export let value: Lasso | null;
+	export let value: Selection | null;
 	export let type: "gallery" | "table";
 	export let selected = false;
 </script>

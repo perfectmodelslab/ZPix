@@ -146,7 +146,7 @@ Icons:
 - [Dice](https://www.flaticon.com/free-icon/dice_1714307) by Juicy Fish
 - [Folder](https://www.flaticon.com/free-icon/folder_2577144) by Freepik
 - [FAQ](https://www.freepik.com/icon/technology_13631866) by Kerismaker
-- [Refresh](https://lucide.dev/icons/refresh-ccw) and [Lasso](https://lucide.dev/icons/lasso) by Lucide
+- [Refresh](https://lucide.dev/icons/refresh-ccw), [Lasso](https://lucide.dev/icons/lasso), [Square Dashed](https://lucide.dev/icons/square-dashed) and [Circle Dashed](https://lucide.dev/icons/circle-dashed) by Lucide
 
 ## Thanks
 

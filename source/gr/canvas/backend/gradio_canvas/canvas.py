@@ -148,7 +148,7 @@ class CanvasData(GradioModel):
 
 
 class Tool(Protocol):
-    """Component a canvas hosts, e.g. LassoTool.
+    """Component a canvas hosts, e.g. a FreehandLassoTool.
 
     A canvas tells its tools its ID, by which they find it in the frontend.
     """
@@ -183,7 +183,7 @@ class ToolEvent(EventData):
 class Canvas(Component):
     """
     Displays documents, one at a time, with thumbnails of all of them, and
-    hosts tools to edit the displayed one, e.g. a LassoTool.
+    hosts tools to edit the displayed one, e.g. a FreehandLassoTool.
     User adds documents by dropping images onto the canvas.
     """
 
@@ -233,7 +233,7 @@ class Canvas(Component):
         """
         Parameters:
             docs: documents, as a CanvasValue or as a list of documents or images, the last one displayed. If a function is provided, the function will be called each time the app loads to set the initial value of this component.
-            tools: groups of tools to edit the displayed document with, e.g. [[free_lasso, poly_lasso]] for lasso tools. A separator sets groups apart in the toolbar. User selects one tool at a time, the first one at start.
+            tools: groups of tools to edit the displayed document with, e.g. [[free_lasso, poly_lasso], [rect_select, ellipse_select]] for select tools. A separator sets groups apart in the toolbar. User selects one tool at a time, the first one at start.
             buttons: buttons shown at the top left of the canvas. "fullscreen" toggles fullscreen, as does the F key.
             fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas isn't fullscreen.
             exit_fullscreen_tooltip: tooltip of the "fullscreen" button, while canvas is fullscreen.

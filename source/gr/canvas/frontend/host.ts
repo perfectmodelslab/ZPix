@@ -1,5 +1,5 @@
 /**
- * Tool host: what a canvas gives its tools, e.g. LassoTool, in the frontend.
+ * Tool host: what a canvas gives its tools, e.g. a FreehandLassoTool, in the frontend.
  *
  * Canvas and tools mount in any order, so they meet on window: canvas
  * announces its host as it mounts (`HOST_EVENT`), and answers tools asking

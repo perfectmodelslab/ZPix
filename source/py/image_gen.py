@@ -10,7 +10,7 @@ import gradio as gr
 import torch
 from diffusers.modular_pipelines.modular_pipeline import ModularPipeline
 from gradio_canvas import CanvasValue, Doc, Layer
-from gradio_lasso_tools import lasso_to_mask
+from gradio_select_tools import selection_to_mask
 from PIL import Image
 
 from source.py.blocking_task import BlockingTask
@@ -173,7 +173,7 @@ def generate(
             pipe_kwargs["image"] = ref_images
 
     if inpaint_source:
-        mask = lasso_to_mask(lasso, inpaint_source.size)  # ty: ignore
+        mask = selection_to_mask(lasso, inpaint_source.size)  # ty: ignore
         pipe_kwargs.update(
             get_inpaint_kwargs(
                 inpaint_source, mask, (width, height), int(inpaint_steps), int(steps)

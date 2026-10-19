@@ -10,7 +10,12 @@ from shutil import rmtree
 import gradio as gr
 import torch
 from gradio_canvas import Canvas
-from gradio_lasso_tools import FreehandLassoTool, PolygonalLassoTool
+from gradio_select_tools import (
+    EllipseSelectTool,
+    FreehandLassoTool,
+    PolygonalLassoTool,
+    RectangleSelectTool,
+)
 
 # Force tensorwise FP8 matmul kernels as a fallback on hardware that lacks
 # native row-wise FP8 support, such as consumer NVIDIA Blackwell cards.
@@ -754,7 +759,7 @@ if __name__ == "__main__":
                 )
                 """Region to edit in displayed document."""
 
-                # Shares its selection with `free_lasso`, whose value follows it.
+                # Select tools share their selection with `free_lasso`, whose value follows it.
                 poly_lasso = PolygonalLassoTool(
                     enable_tooltip=t("Enable polygonal lasso (L)"),
                     disable_tooltip=t("Disable polygonal lasso"),
@@ -769,12 +774,32 @@ if __name__ == "__main__":
                     ),
                     interactive=initial_model.supports_inpainting(),
                 )
+                rect_select = RectangleSelectTool(
+                    enable_tooltip=t("Enable rectangular selection (M)"),
+                    disable_tooltip=t("Disable rectangular selection"),
+                    draw_tooltip=t("Select an area to inpaint"),
+                    clear_tooltip="\n".join(
+                        [*selection_tooltips, t("Click: clear selection")]
+                    ),
+                    interactive=initial_model.supports_inpainting(),
+                )
+                ellipse_select = EllipseSelectTool(
+                    enable_tooltip=t("Enable elliptical selection (M)"),
+                    disable_tooltip=t("Disable elliptical selection"),
+                    draw_tooltip=t("Select an area to inpaint"),
+                    clear_tooltip="\n".join(
+                        [*selection_tooltips, t("Click: clear selection")]
+                    ),
+                    interactive=initial_model.supports_inpainting(),
+                )
+                select_tools = [free_lasso, poly_lasso, rect_select, ellipse_select]
 
                 canvas = Canvas(
                     label=t("Canvas"),
                     show_label=False,
                     tools=[
                         [free_lasso, poly_lasso],
+                        [rect_select, ellipse_select],
                     ],
                     caption_key="prompt",
                     placeholder=t("Drop an image or generate one with a prompt"),
@@ -812,18 +837,20 @@ if __name__ == "__main__":
                     show_progress="hidden",
                 )
 
-                # On model load success, allow drawing a lasso only if model inpaints.
-                # Lasso drawn is kept, but ignored by models that don't inpaint.
+                # On model load success, allow selecting only if model inpaints.
+                # Selection is kept, but ignored by models that don't inpaint.
                 model_load.success(
                     lambda image_model, points: (
-                        gr.update(interactive=image_model.supports_inpainting()),
-                        gr.update(interactive=image_model.supports_inpainting()),
+                        *[
+                            gr.update(interactive=image_model.supports_inpainting())
+                            for _ in select_tools
+                        ],
                         *sync_ui_to_inpainting_mode(
                             image_model, lasso_drawn=bool(points)
                         ),
                     ),
                     inputs=[model, free_lasso],
-                    outputs=[free_lasso, poly_lasso, *inpaint_settings],
+                    outputs=[*select_tools, *inpaint_settings],
                     show_progress="hidden",
                 )
 

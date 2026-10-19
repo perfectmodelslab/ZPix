@@ -1,11 +1,11 @@
 import type { ILoadingStatus as LoadingStatus } from "@gradio/statustracker";
-import type { Lasso } from "./lasso";
+import type { Mode, Selection } from "./selection";
 
-export interface LassoToolProps {
-	value: Lasso | null;
+export interface SelectToolProps {
+	value: Selection | null;
 	canvas_id: number | null;
-	/** Whether user clicks vertices joined by straight segments, else drags freehand. */
-	polygonal: boolean;
+	/** How user draws. */
+	mode: Mode;
 	enable_tooltip: string | null;
 	disable_tooltip: string | null;
 	draw_tooltip: string | null;
@@ -14,7 +14,7 @@ export interface LassoToolProps {
 	smoothing: number;
 }
 
-export interface LassoToolEvents {
+export interface SelectToolEvents {
 	change: never;
 	input: never;
 	drawn: never;

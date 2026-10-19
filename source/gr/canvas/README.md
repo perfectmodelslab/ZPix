@@ -1,6 +1,6 @@
 # Gradio Canvas
 
-A custom component displaying documents one at a time, with thumbnails of all of them, and hosting tools to edit the displayed one, e.g. [lasso tools](../lasso_tools/README.md).
+A custom component displaying documents one at a time, with thumbnails of all of them, and hosting tools to edit the displayed one, e.g. [select tools](../select_tools/README.md).
 
 ```python
 from gradio_canvas import Canvas, CanvasValue, DocEvent

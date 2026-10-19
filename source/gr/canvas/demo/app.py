@@ -2,7 +2,7 @@
 
 import gradio as gr
 from gradio_canvas import Canvas, CanvasValue, DocEvent, ToolEvent
-from gradio_lasso_tools import FreehandLassoTool
+from gradio_select_tools import FreehandLassoTool
 from PIL import Image
 
 images = [Image.new("RGB", (1200, 800), color) for color in ("steelblue", "tomato")]

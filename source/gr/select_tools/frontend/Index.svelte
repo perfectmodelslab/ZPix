@@ -1,34 +1,43 @@
 <script lang="ts">
-	import type { LassoToolProps, LassoToolEvents } from "./types";
+	import type { SelectToolProps, SelectToolEvents } from "./types";
 	import { IconButton } from "@gradio/atoms";
 	import { Gradio } from "@gradio/utils";
 	import { onDestroy, onMount } from "svelte";
 	import { find_host, type CanvasHost } from "./canvas_host";
-	import { LassoGroup, type LassoTool } from "./group";
+	import EllipseSelectIcon from "./EllipseSelectIcon.svelte";
+	import { SelectionGroup, type SelectTool } from "./group";
 	import LassoIcon from "./LassoIcon.svelte";
-	import type { Lasso } from "./lasso";
 	import PolygonalLassoIcon from "./PolygonalLassoIcon.svelte";
+	import RectangleSelectIcon from "./RectangleSelectIcon.svelte";
+	import type { Selection } from "./selection";
+
+	const ICONS = {
+		freehand: LassoIcon,
+		polygonal: PolygonalLassoIcon,
+		rectangle: RectangleSelectIcon,
+		ellipse: EllipseSelectIcon
+	};
 
 	const props = $props();
-	const gradio = new Gradio<LassoToolEvents, LassoToolProps>(props);
+	const gradio = new Gradio<SelectToolEvents, SelectToolProps>(props);
 
-	// This component renders nothing in place: the lasso goes over the
-	// document displayed by the canvas, on the overlay its lasso tools share,
+	// This component renders nothing in place: the selection goes over the
+	// document displayed by the canvas, on the overlay its select tools share,
 	// and the tool button in the canvas toolbar.
 	let button: HTMLElement;
 
-	let old_value: Lasso | null = gradio.props.value ?? null;
+	let old_value: Selection | null = gradio.props.value ?? null;
 
 	let host: CanvasHost | null = $state(null);
-	let group: LassoGroup | null = null;
+	let group: SelectionGroup | null = null;
 	/** Whether user selected this tool in the canvas. */
 	let active = $state(false);
 	let forget_host: (() => void) | null = null;
 
-	const tool: LassoTool = {
+	const tool: SelectTool = {
 		id: gradio.shared.id,
 		state: {
-			mode: "freehand",
+			mode: gradio.props.mode,
 			visible: true,
 			interactive: true,
 			marching_ants: true,
@@ -36,7 +45,7 @@
 			tooltips: ["", ""]
 		},
 		on_change(value, input) {
-			if (same_lasso(value, old_value)) return;
+			if (same_selection(value, old_value)) return;
 
 			dispatch_presence(old_value, value);
 			old_value = value;
@@ -46,12 +55,12 @@
 		}
 	};
 
-	function same_lasso(a: Lasso | null, b: Lasso | null): boolean {
+	function same_selection(a: Selection | null, b: Selection | null): boolean {
 		return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 	}
 
-	/** Tell whether lasso appeared or disappeared, if so. */
-	function dispatch_presence(old: Lasso | null, value: Lasso | null): void {
+	/** Tell whether selection appeared or disappeared, if so. */
+	function dispatch_presence(old: Selection | null, value: Selection | null): void {
 		if (!old && value) gradio.dispatch("drawn");
 		else if (old && !value) gradio.dispatch("cleared");
 	}
@@ -61,7 +70,7 @@
 
 		host = canvas;
 		canvas.add_tool(gradio.shared.id, button);
-		group = LassoGroup.of(canvas);
+		group = SelectionGroup.of(canvas);
 		group.join(tool, old_value);
 
 		const update = (): void => {
@@ -89,10 +98,10 @@
 		group?.leave(gradio.shared.id);
 	});
 
-	// Value set by an event: the other lasso tools of the canvas follow.
+	// Value set by an event: the other select tools of the canvas follow.
 	$effect(() => {
 		const value = gradio.props.value ?? null;
-		if (!same_lasso(value, old_value)) {
+		if (!same_selection(value, old_value)) {
 			dispatch_presence(old_value, value);
 			old_value = value;
 			group?.set_value(gradio.shared.id, value);
@@ -102,7 +111,7 @@
 
 	$effect(() => {
 		tool.state = {
-			mode: gradio.props.polygonal ? "polygonal" : "freehand",
+			mode: gradio.props.mode,
 			visible: gradio.shared.visible !== false,
 			interactive: gradio.shared.interactive !== false,
 			marching_ants: gradio.props.marching_ants !== false,
@@ -120,7 +129,7 @@
 	hidden={!host || gradio.shared.visible === false}
 >
 	<IconButton
-		Icon={gradio.props.polygonal ? PolygonalLassoIcon : LassoIcon}
+		Icon={ICONS[gradio.props.mode]}
 		label={(active
 			? gradio.props.disable_tooltip
 			: gradio.props.enable_tooltip) ?? ""}

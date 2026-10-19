@@ -1,5 +1,5 @@
 /**
- * Lasso tools of a canvas, e.g. a FreehandLassoTool and a PolygonalLassoTool,
+ * Select tools of a canvas, e.g. a FreehandLassoTool and a RectangleSelectTool,
  * share one selection, drawn on one overlay, and shortcuts: they differ only
  * in how user draws.
  *
@@ -10,16 +10,24 @@
 import type { CanvasHost } from "./canvas_host";
 import {
 	IS_MAC,
-	LassoOverlay,
+	SelectionOverlay,
 	OVERLAY_TAG,
 	primary_key,
-	type Lasso,
-	type Mode
-} from "./lasso";
+	type Mode,
+	type Selection
+} from "./selection";
 
-const GROUP_KEY = Symbol.for("gradio_lasso_tools.group");
+const GROUP_KEY = Symbol.for("gradio_select_tools.group");
 
-export interface LassoToolState {
+/** Key selecting the tools of each mode: L the lassos, M the shapes. */
+const KEYS: Record<Mode, string> = {
+	freehand: "l",
+	polygonal: "l",
+	rectangle: "m",
+	ellipse: "m"
+};
+
+export interface SelectToolState {
 	mode: Mode;
 	visible: boolean;
 	interactive: boolean;
@@ -28,11 +36,11 @@ export interface LassoToolState {
 	tooltips: [string, string];
 }
 
-export interface LassoTool {
+export interface SelectTool {
 	readonly id: number;
-	state: LassoToolState;
+	state: SelectToolState;
 	/** Selection changed: by user if `input`, else by another tool's value. */
-	on_change(value: Lasso | null, input: boolean): void;
+	on_change(value: Selection | null, input: boolean): void;
 }
 
 function is_text_field(target: EventTarget | null): boolean {
@@ -42,19 +50,19 @@ function is_text_field(target: EventTarget | null): boolean {
 	);
 }
 
-export class LassoGroup {
-	readonly overlay: LassoOverlay;
-	#tools = new Map<number, LassoTool>();
-	/** Lasso tool user selected last, which L selects back. */
-	#current: number | null = null;
+export class SelectionGroup {
+	readonly overlay: SelectionOverlay;
+	#tools = new Map<number, SelectTool>();
+	/** Tool user selected last, by key, which this key selects back. */
+	#current = new Map<string, number>();
 
 	#on_tool_change = (): void => this.refresh();
 
 	/**
-	 * L selects the lasso tool user selected last, or the next one if a lasso
-	 * tool is selected, unless user types text with pointer away from the
-	 * canvas area.
-	 * While a lasso tool is selected, Ctrl+D (Cmd+D on macOS) clears the
+	 * L (M) selects the lasso (shape) tool user selected last, or the next
+	 * one if such a tool is selected, unless user types text with pointer away
+	 * from the canvas area.
+	 * While a select tool is selected, Ctrl+D (Cmd+D on macOS) clears the
 	 * selection, Ctrl+Shift+D selects it back, and Ctrl+Shift+I inverts it.
 	 */
 	#on_keydown = (event: KeyboardEvent): void => {
@@ -72,27 +80,27 @@ export class LassoGroup {
 		// The other one of Ctrl and Cmd: Ctrl+click is a right click on macOS.
 		if (IS_MAC ? event.ctrlKey : event.metaKey) return;
 
-		if (!primary && key === "l") this.#select_tool(event);
+		if (!primary && Object.values(KEYS).includes(key)) this.#select_tool(key, event);
 		else if (primary && (key === "d" || (key === "i" && event.shiftKey))) {
 			this.#edit_selection(key, event);
 		}
 	};
 
-	/** Group of the lasso tools of a canvas. */
-	static of(host: CanvasHost): LassoGroup {
-		const slot = host as unknown as Record<symbol, LassoGroup | undefined>;
-		return (slot[GROUP_KEY] ??= new LassoGroup(host));
+	/** Group of the select tools of a canvas. */
+	static of(host: CanvasHost): SelectionGroup {
+		const slot = host as unknown as Record<symbol, SelectionGroup | undefined>;
+		return (slot[GROUP_KEY] ??= new SelectionGroup(host));
 	}
 
 	private constructor(readonly host: CanvasHost) {
-		this.overlay = document.createElement(OVERLAY_TAG) as LassoOverlay;
+		this.overlay = document.createElement(OVERLAY_TAG) as SelectionOverlay;
 		host.doc_el.append(this.overlay);
 		this.overlay.area = host.area;
 		this.overlay.bands = host.frame;
 		this.overlay.target = host.image;
 
-		this.overlay.addEventListener("lasso-change", (event) => {
-			const value = (event as CustomEvent<Lasso | null>).detail;
+		this.overlay.addEventListener("selection-change", (event) => {
+			const value = (event as CustomEvent<Selection | null>).detail;
 			for (const tool of this.#tools.values()) tool.on_change(value, true);
 		});
 		host.addEventListener("tool-change", this.#on_tool_change);
@@ -100,7 +108,7 @@ export class LassoGroup {
 	}
 
 	/** Add a tool, with its value, which is the selection unless null. */
-	join(tool: LassoTool, value: Lasso | null): void {
+	join(tool: SelectTool, value: Selection | null): void {
 		this.#tools.set(tool.id, tool);
 
 		if (value) this.set_value(tool.id, value);
@@ -124,7 +132,7 @@ export class LassoGroup {
 	}
 
 	/** Selection set by an event to a tool's value: the other tools follow. */
-	set_value(id: number, value: Lasso | null): void {
+	set_value(id: number, value: Selection | null): void {
 		this.overlay.value = value;
 		for (const tool of this.#tools.values()) {
 			if (tool.id !== id) tool.on_change(value, false);
@@ -134,7 +142,7 @@ export class LassoGroup {
 	/** Apply tool states, e.g. after one changed. */
 	refresh(): void {
 		const active = this.#active();
-		if (active) this.#current = active.id;
+		if (active) this.#current.set(KEYS[active.state.mode], active.id);
 
 		// Selection shows as the active tool sets, else as the first one.
 		const shown = active ?? this.#ordered()[0];
@@ -148,29 +156,32 @@ export class LassoGroup {
 		overlay.tooltips = shown?.state.tooltips ?? ["", ""];
 	}
 
-	#active(): LassoTool | undefined {
+	#active(): SelectTool | undefined {
 		return this.host.tool === null ? undefined : this.#tools.get(this.host.tool);
 	}
 
 	/** Tools in the order they were given to canvas. */
-	#ordered(): LassoTool[] {
+	#ordered(): SelectTool[] {
 		return this.host.tool_groups
 			.flat()
 			.flatMap((id) => this.#tools.get(id) ?? []);
 	}
 
-	#selectable(tool: LassoTool): boolean {
+	#selectable(tool: SelectTool): boolean {
 		return tool.state.visible && tool.state.interactive;
 	}
 
-	#select_tool(event: KeyboardEvent): void {
-		const tools = this.#ordered().filter((tool) => this.#selectable(tool));
+	#select_tool(key: string, event: KeyboardEvent): void {
+		const tools = this.#ordered().filter(
+			(tool) => KEYS[tool.state.mode] === key && this.#selectable(tool)
+		);
 		if (!tools.length) return;
 
 		const active = this.#active();
-		const tool = active
-			? tools[(tools.indexOf(active) + 1) % tools.length]
-			: (tools.find((tool) => tool.id === this.#current) ?? tools[0]);
+		const tool =
+			active && tools.includes(active)
+				? tools[(tools.indexOf(active) + 1) % tools.length]
+				: (tools.find((tool) => tool.id === this.#current.get(key)) ?? tools[0]);
 
 		event.preventDefault();
 		this.host.tool = tool.id;

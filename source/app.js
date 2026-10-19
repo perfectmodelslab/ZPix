@@ -77,7 +77,7 @@ async function uploadDroppedImage(event) {
     }
 
     const imageUrl = event.dataTransfer.getData("text/uri-list")
-    // Chrome drops a canvas image as a file, Firefox and lasso tools
+    // Chrome drops a canvas image as a file, Firefox and select tools
     // as its URL.
     if (!imageUrl || event.dataTransfer.files.length) return
 

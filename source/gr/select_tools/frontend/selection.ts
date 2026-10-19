@@ -1,35 +1,48 @@
 /**
- * Lasso overlay, drawn over an image displayed with `object-fit: contain`.
+ * Selection overlay, drawn over an image displayed with `object-fit: contain`.
  *
  * The overlay goes inside a positioned parent of the image and only covers
  * the image content, i.e. not the letterbox bands added by `object-fit`.
- * Lasso vertices are in pixels of the original image.
+ * Selection vertices are in pixels of the original image.
  *
- * An outline is drawn in segments: freehand ones, following the pointer
+ * A lasso outline is drawn in segments: freehand ones, following the pointer
  * while pressed, and straight ones, from a vertex to the next click. Each lasso
- * tool mode draws one kind by default, and the other with Alt.
+ * mode draws one kind by default, and the other with Alt. A shape outline,
+ * rectangle or ellipse, is dragged from a corner to the opposite one, or from
+ * its center. A shape tool rather moves the selection dragged from inside.
  */
 
 import {
 	clamp,
 	combine,
 	constrain,
+	contains,
+	ellipse,
 	invert,
+	rectangle,
 	round,
 	smooth,
-	type Lasso,
+	translate,
+	type Box,
 	type Operation,
 	type Point,
+	type Selection,
 	type Size
 } from "./geometry";
 
-export type { Lasso, Point } from "./geometry";
+export type { Point, Selection } from "./geometry";
 
 /**
- * How a lasso is drawn: "freehand" by dragging, or "polygonal" by clicking
- * vertices, which straight segments join.
+ * How an outline is drawn: "freehand" by dragging, "polygonal" by clicking
+ * vertices, which straight segments join, or "rectangle" and "ellipse" by
+ * dragging a box the shape fits in.
  */
-export type Mode = "freehand" | "polygonal";
+export type Mode = "freehand" | "polygonal" | "rectangle" | "ellipse";
+
+/** Whether a mode drags a shape, rather than drawing a lasso. */
+function is_shape(mode: Mode): boolean {
+	return mode === "rectangle" || mode === "ellipse";
+}
 
 /** Keys held during a pointer or keyboard event. */
 interface Keys {
@@ -39,12 +52,12 @@ interface Keys {
 	metaKey: boolean;
 }
 
-/** A lasso needs this many vertices to enclose a region. */
+/** An outline needs this many vertices to enclose a region. */
 const MIN_POINTS = 3;
 
 /**
  * Pointer moves up to this (in CSS pixels) are a click's jitter, not a move.
- * No one draws a lasso that small anyway.
+ * No one draws a selection that small anyway.
  */
 const MOVE_THRESHOLD = 10;
 
@@ -66,9 +79,10 @@ export function primary_key(keys: Keys): boolean {
 }
 
 /**
- * Lasso icon from Lucide (https://lucide.dev/icons/lasso), and its polygonal
- * variant, outlined in white to stand out on dark images. Their hotspot is
- * the tip of the rope.
+ * Lasso icon from Lucide (https://lucide.dev/icons/lasso) and its polygonal
+ * variant, whose hotspot is the tip of the rope, and move icon from Lucide
+ * (https://lucide.dev/icons/move), whose hotspot is its center. Cursors are
+ * outlined in white to stand out on dark images.
  *
  * Copyright (c) 2026 Lucide Icons and Contributors. ISC License: permission
  * to use, copy, modify, and/or distribute this software for any purpose with
@@ -77,16 +91,27 @@ export function primary_key(keys: Keys): boolean {
  */
 const ROPE_END = '<path d="M7 22a5 5 0 0 1-2-3.994"/><circle cx="5" cy="16" r="2"/>';
 
-const ICONS: Record<Mode, string> = {
+/** Shapes are dragged with a crosshair, whose hotspot is its center. */
+const CROSSHAIR = '<path d="M12 4v16M4 12h16"/>';
+
+/** Icon of the cursor: of a mode, or of moving the selection. */
+type Icon = Mode | "move";
+
+const ICONS: Record<Icon, string> = {
 	freehand: '<path d="M3.704 14.467a10 8 0 1 1 3.115 2.375"/>' + ROPE_END,
 	// Hexagon inscribed in the freehand loop, a corner on the knot.
-	polygonal: '<path d="M4.35 14.11 2.3 8.2 9.1 2.3l9.7 1.9 2.9 7.6-6.8 5.9-7.93-1.36"/>' + ROPE_END
+	polygonal: '<path d="M4.35 14.11 2.3 8.2 9.1 2.3l9.7 1.9 2.9 7.6-6.8 5.9-7.93-1.36"/>' + ROPE_END,
+	rectangle: CROSSHAIR,
+	ellipse: CROSSHAIR,
+	move:
+		'<path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/>' +
+		'<path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/>'
 };
 
 /** What the cursor tells a click or drag would do. */
 type Sign = Operation | "close";
 
-/** Signs at the bottom right of the lasso icon. */
+/** Signs at the bottom right of the icon. */
 const SIGNS: Record<Sign, string> = {
 	add: '<path d="M22 26h8M26 22v8"/>',
 	subtract: '<path d="M22 26h8"/>',
@@ -96,23 +121,28 @@ const SIGNS: Record<Sign, string> = {
 
 const CURSORS = new Map<string, string>();
 
-/** Lasso cursor, with a sign if any, which makes it 24px instead of 16px. */
-function lasso_cursor(mode: Mode, sign: Sign | null): string {
-	const key = `${mode} ${sign}`;
+/** Cursor of an icon, with a sign if any, which makes it 1.5 times larger. */
+function icon_cursor(name: Icon, sign: Sign | null): string {
+	const key = `${name} ${sign}`;
 	const cached = CURSORS.get(key);
 	if (cached) return cached;
 
-	const icon = ICONS[mode] + (sign ? SIGNS[sign] : "");
-	const size = sign ? 24 : 16;
+	const icon = ICONS[name] + (sign ? SIGNS[sign] : "");
+	// Icons are 24 units, shown 16px, or 20px for the crosshair of shapes.
+	const scale = name === "rectangle" || name === "ellipse" ? 20 / 24 : 16 / 24;
+	const view_size = sign ? 36 : 24;
+	const size = view_size * scale;
 	// Same scale with or without a sign, hence the same hotspot.
-	const view_size = size * 1.5;
+	const [x, y] = name === "freehand" || name === "polygonal" ? [7.5, 22.5] : [12, 12];
+	const hotspot = `${Math.round(x * scale)} ${Math.round(y * scale)}`;
 	const svg =
 		`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" ` +
 		`viewBox="0 0 ${view_size} ${view_size}" fill="none" ` +
 		'stroke-linecap="round" stroke-linejoin="round">' +
 		`<g stroke="white" stroke-width="4">${icon}</g>` +
 		`<g stroke="black" stroke-width="2">${icon}</g></svg>`;
-	const cursor = `url("data:image/svg+xml,${encodeURIComponent(svg)}") 5 15, crosshair`;
+	const fallback = name === "move" ? "move" : "crosshair";
+	const cursor = `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotspot}, ${fallback}`;
 
 	CURSORS.set(key, cursor);
 	return cursor;
@@ -154,11 +184,11 @@ const STYLE = `
 	}
 
 	#draft {
-		stroke: var(--lasso-tool-color, var(--color-accent, #f97316));
+		stroke: var(--select-tool-color, var(--color-accent, #f97316));
 	}
 
 	/* Marching ants: black dashes over a white line. */
-	#lasso {
+	#selection {
 		stroke: white;
 	}
 
@@ -179,22 +209,22 @@ const STYLE = `
 	}
 `;
 
-export class LassoOverlay extends HTMLElement {
+export class SelectionOverlay extends HTMLElement {
 	#target: HTMLImageElement | null = null;
 	/** As drawn, kept intact while browsing images. */
-	#lasso: Lasso | null = null;
-	/** Resolution of the image lasso was drawn over. */
+	#selection: Selection | null = null;
+	/** Resolution of the image selection was drawn over. */
 	#size: Size | null = null;
-	/** Last lasso user cleared, which they may select back, and its resolution. */
-	#deselected: { lasso: Lasso; size: Size | null } | null = null;
+	/** Last selection user cleared, which they may select back, and its resolution. */
+	#deselected: { selection: Selection; size: Size | null } | null = null;
 	#draft_el: SVGPolylineElement;
-	#lasso_el: SVGPathElement;
+	#selection_el: SVGPathElement;
 	#ants_el: SVGPathElement;
 	/** Last emitted value, as JSON, to emit only changes. */
 	#emitted = "null";
 
 	/**
-	 * Element lasso is drawn within, e.g. the canvas: a drawing leaving it
+	 * Element selection is drawn within, e.g. the canvas: a drawing leaving it
 	 * is in fact a drag of image to another element.
 	 */
 	area: HTMLElement | null = null;
@@ -215,17 +245,23 @@ export class LassoOverlay extends HTMLElement {
 	#drawing = false;
 	/** Whether this drag started the outline, which leaving the area drops then. */
 	#fresh = false;
-	/** What lasso being drawn does to the current one, if not replace it. */
+	/** What outline being drawn does to the current selection, if not replace it. */
 	#operation: Operation | null = null;
 	/** Operation of the shortcut held while pointer is over overlay, if any. */
 	#held: Operation | null = null;
+	/** Whether pointer hovers the selection, which a shape tool moves then. */
+	#over = false;
+	/** Whether user moves the selection, rather than draws. */
+	#moving = false;
+	/** Modifiers held since the press which set the operation, so don't constrain a shape. */
+	#latched = { shift: false, alt: false };
 	/** Where user pressed, in client pixels, to tell a click from a move. */
 	#press: Point | null = null;
 	/** Where user pressed, in image pixels. */
 	#press_point: Point | null = null;
-	/** Lasso as it was when user started drawing, back if user cancels. */
-	#original: Lasso | null = null;
-	/** Vertices of the outline being drawn, applied to the current lasso once closed. */
+	/** Selection as it was when user started drawing or moving it, back if user cancels. */
+	#original: Selection | null = null;
+	/** Vertices of the outline being drawn, applied to the current selection once closed. */
 	#draft: Point[] | null = null;
 	/** Draft length at the end of each segment, back to which Delete goes. */
 	#marks: number[] = [];
@@ -265,9 +301,9 @@ export class LassoOverlay extends HTMLElement {
 	};
 
 	/**
-	 * While user draws: Escape cancels, Delete removes the last segment, and
-	 * modifiers change the segment being drawn. Captured before others, e.g.
-	 * the canvas, which leaves fullscreen on Escape.
+	 * While user presses or draws: Escape cancels, Delete removes the last
+	 * segment, and modifiers change the segment or shape being drawn. Captured
+	 * before others, e.g. the canvas, which leaves fullscreen on Escape.
 	 */
 	#on_drawing_key = (event: KeyboardEvent): void => {
 		const keydown = event.type === "keydown";
@@ -328,13 +364,13 @@ export class LassoOverlay extends HTMLElement {
 		style.textContent = STYLE;
 
 		const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-		// Lasso being drawn goes over the one it adds to or subtracts from.
+		// Outline being drawn goes over the selection it adds to or subtracts from.
 		svg.innerHTML =
-			'<path id="lasso"></path>' +
+			'<path id="selection"></path>' +
 			'<path id="ants"></path>' +
 			'<polyline id="draft"></polyline>';
 		this.#draft_el = svg.querySelector("#draft")!;
-		this.#lasso_el = svg.querySelector("#lasso")!;
+		this.#selection_el = svg.querySelector("#selection")!;
 		this.#ants_el = svg.querySelector("#ants")!;
 
 		shadow.append(style, svg);
@@ -349,8 +385,8 @@ export class LassoOverlay extends HTMLElement {
 	}
 
 	/**
-	 * Image to draw the lasso over. Lasso persists when another image is
-	 * displayed, scaled to its resolution, so user finds it back while
+	 * Image to draw the selection over. Selection persists when another image
+	 * is displayed, scaled to its resolution, so user finds it back while
 	 * browsing images.
 	 */
 	get target(): HTMLImageElement | null {
@@ -386,6 +422,7 @@ export class LassoOverlay extends HTMLElement {
 
 		this.#finish();
 		this.#mode = mode;
+		this.#over = false;
 		this.#update_cursor();
 	}
 
@@ -404,8 +441,8 @@ export class LassoOverlay extends HTMLElement {
 	}
 
 	/**
-	 * Tooltips shown over the image: while no lasso is drawn, e.g. to tell
-	 * how to draw one, then once drawn, e.g. to tell how to clear it.
+	 * Tooltips shown over the image: while nothing is selected, e.g. to tell
+	 * how to select, then once selected, e.g. to tell how to clear it.
 	 */
 	get tooltips(): [string, string] {
 		return this.#tooltips;
@@ -417,15 +454,16 @@ export class LassoOverlay extends HTMLElement {
 	}
 
 	/**
-	 * Lasso in pixels of the displayed image, scaled to it.
+	 * Selection in pixels of the displayed image, scaled to it.
 	 * Setting it emits no event.
 	 */
-	get value(): Lasso | null {
+	get value(): Selection | null {
 		return this.#scaled();
 	}
 
-	set value(lasso: Lasso | null) {
-		this.#lasso = lasso && lasso.map((outline) => outline.map(([x, y]): Point => [x, y]));
+	set value(selection: Selection | null) {
+		this.#selection =
+			selection && selection.map((outline) => outline.map(([x, y]): Point => [x, y]));
 		// Value refers to displayed image, if any.
 		this.#size = natural_size(this.#target) ?? this.#size;
 		this.#emitted = JSON.stringify(round(this.#scaled()));
@@ -433,23 +471,23 @@ export class LassoOverlay extends HTMLElement {
 		this.#render();
 	}
 
-	/** Clear the lasso, which `reselect` brings back. */
+	/** Clear the selection, which `reselect` brings back. */
 	clear(): void {
 		if (this.#busy) this.#cancel();
-		if (this.#lasso) this.#deselected = { lasso: this.#lasso, size: this.#size };
+		if (this.#selection) this.#deselected = { selection: this.#selection, size: this.#size };
 
-		this.#lasso = null;
+		this.#selection = null;
 		this.#reset();
 		this.#render();
 		this.#emit();
 	}
 
-	/** Bring back the last lasso cleared, if any, in place of the current one. */
+	/** Bring back the last selection cleared, if any, in place of the current one. */
 	reselect(): void {
 		if (this.#busy) this.#cancel();
 		if (!this.#deselected) return;
 
-		this.#lasso = this.#deselected.lasso;
+		this.#selection = this.#deselected.selection;
 		this.#size = this.#deselected.size;
 		this.#render();
 		this.#emit();
@@ -462,11 +500,11 @@ export class LassoOverlay extends HTMLElement {
 		const size = natural_size(this.#target);
 		if (!size) return;
 
-		let inverted: Lasso | null;
+		let inverted: Selection | null;
 		try {
 			inverted = invert(this.#scaled(), size);
 		} catch (error) {
-			console.warn("Lasso tool couldn't invert lasso:", error);
+			console.warn("Select tool couldn't invert selection:", error);
 			return;
 		}
 
@@ -475,7 +513,7 @@ export class LassoOverlay extends HTMLElement {
 			return;
 		}
 
-		this.#lasso = inverted;
+		this.#selection = inverted;
 		this.#size = size;
 		this.#render();
 		this.#emit();
@@ -542,18 +580,18 @@ export class LassoOverlay extends HTMLElement {
 	}
 
 	/**
-	 * Lasso scaled to displayed image, whose resolution may differ from the
-	 * drawn one, so it surrounds the same region.
+	 * Selection scaled to displayed image, whose resolution may differ from
+	 * the drawn one, so it surrounds the same region.
 	 */
-	#scaled(): Lasso | null {
-		const lasso = this.#lasso;
+	#scaled(): Selection | null {
+		const selection = this.#selection;
 		const size = natural_size(this.#target);
-		if (!lasso || !size || !this.#size) return lasso;
+		if (!selection || !size || !this.#size) return selection;
 
 		const scale_x = size.width / this.#size.width;
 		const scale_y = size.height / this.#size.height;
 
-		return lasso.map((outline) =>
+		return selection.map((outline) =>
 			outline.map(([x, y]): Point => [x * scale_x, y * scale_y])
 		);
 	}
@@ -583,34 +621,36 @@ export class LassoOverlay extends HTMLElement {
 	#render(): void {
 		const image = this.#target;
 		const loaded = !!natural_size(image);
-		const lasso = loaded ? this.#scaled() : null;
+		const selection = loaded ? this.#scaled() : null;
 		const outline = loaded ? this.#outline() : null;
 
-		this.title = this.#drawing ? "" : this.#tooltips[lasso ? 1 : 0];
+		this.title = this.#drawing ? "" : this.#tooltips[selection ? 1 : 0];
 
 		this.#draft_el.style.display = outline ? "inline" : "none";
 		// Drawn in overlay pixels, for strokes and dashes to keep their size.
 		if (outline) this.#draft_el.setAttribute("points", this.#to_svg(outline, image!));
 
-		for (const el of [this.#lasso_el, this.#ants_el]) {
-			el.style.display = lasso ? "inline" : "none";
-			if (lasso) {
+		for (const el of [this.#selection_el, this.#ants_el]) {
+			el.style.display = selection ? "inline" : "none";
+			if (selection) {
 				el.setAttribute(
 					"d",
-					lasso.map((outline) => `M${this.#to_svg(outline, image!)}Z`).join("")
+					selection.map((outline) => `M${this.#to_svg(outline, image!)}Z`).join("")
 				);
 			}
 		}
 	}
 
 	/**
-	 * Outline being drawn, as shown: freehand segment smoothed as on its end,
-	 * since last vertices settle as next ones come, or straight segment to
-	 * pointer.
+	 * Outline being drawn, as shown: shape closed, freehand segment smoothed
+	 * as on its end, since last vertices settle as next ones come, or straight
+	 * segment to pointer.
 	 */
 	#outline(): Point[] | null {
 		const draft = this.#draft;
-		if (!this.#drawing || !draft) return null;
+		if (!this.#drawing || !draft?.length) return null;
+
+		if (is_shape(this.#mode)) return [...draft, draft[0]];
 
 		if (this.#freehand) {
 			const start = this.#run_start;
@@ -630,12 +670,12 @@ export class LassoOverlay extends HTMLElement {
 
 	/** Emit value, if changed. */
 	#emit(): void {
-		const lasso = round(this.#scaled());
-		const json = JSON.stringify(lasso);
+		const selection = round(this.#scaled());
+		const json = JSON.stringify(selection);
 		if (json === this.#emitted) return;
 
 		this.#emitted = json;
-		this.dispatchEvent(new CustomEvent("lasso-change", { detail: lasso }));
+		this.dispatchEvent(new CustomEvent("selection-change", { detail: selection }));
 	}
 
 	#on_pointerenter(event: PointerEvent): void {
@@ -648,22 +688,47 @@ export class LassoOverlay extends HTMLElement {
 		window.removeEventListener("keydown", this.#on_shortcut_key, true);
 		window.removeEventListener("keyup", this.#on_shortcut_key, true);
 		this.#held = null;
+		this.#over = false;
 		this.#update_cursor();
 	}
 
+	/**
+	 * Operation of the shortcut held, if any. None for a shape while nothing is
+	 * selected: its modifiers rather constrain it.
+	 */
+	#shortcut(keys: Keys): Operation | null {
+		return is_shape(this.#mode) && !this.#selection ? null : shortcut_operation(keys);
+	}
+
+	/** Whether pointer, at `client`, is over the selection, which a shape tool moves. */
+	#over_selection(client: Point): boolean {
+		if (!is_shape(this.#mode) || !this.#target) return false;
+
+		const selection = this.#scaled();
+		return !!selection && contains(selection, this.#point_at(client));
+	}
+
+	/** Tell what a click or drag would do, as pointer hovers or user presses or releases a shortcut. */
 	#hold(event: KeyboardEvent | PointerEvent): void {
-		const held = shortcut_operation(event);
-		if (held === this.#held) return;
+		const held = this.#shortcut(event);
+		const over =
+			event instanceof PointerEvent
+				? this.#over_selection([event.clientX, event.clientY])
+				: this.#over;
+		if (held === this.#held && over === this.#over) return;
 
 		this.#held = held;
+		this.#over = over;
 		this.#update_cursor();
 	}
 
 	/**
 	 * A press, unless an outline is being drawn, prepares one, which starts
 	 * as the pointer moves, or on release for a polygonal lasso. Shift held
-	 * then adds the lasso drawn to the current one, Alt subtracts it, and both
-	 * intersect it. Else it replaces the current one as it starts.
+	 * then adds the outline drawn to the current selection, Alt subtracts it,
+	 * and both intersect it: for a shape, only if something is selected, else
+	 * they constrain it. Else the outline replaces the current selection as it
+	 * starts, or, for a shape pressed inside the selection, moves it.
 	 */
 	#on_pointerdown(event: PointerEvent): void {
 		if (!this.#target || event.button !== 0 || this.#gesture) return;
@@ -677,11 +742,14 @@ export class LassoOverlay extends HTMLElement {
 		if (!this.#drawing) {
 			this.#reset();
 
-			// User edits lasso as displayed, i.e. scaled to this image.
-			this.#lasso = this.#scaled();
+			// User edits selection as displayed, i.e. scaled to this image.
+			this.#selection = this.#scaled();
 			this.#size = natural_size(this.#target);
-			this.#original = this.#lasso;
-			this.#operation = shortcut_operation(event);
+			this.#original = this.#selection;
+			this.#operation = this.#shortcut(event);
+			const operating = this.#operation !== null;
+			this.#latched = { shift: operating && event.shiftKey, alt: operating && event.altKey };
+			this.#moving = !operating && this.#over_selection(client);
 			this.#draft = [point];
 			this.#marks = [1];
 			this.#listen(true);
@@ -702,6 +770,8 @@ export class LassoOverlay extends HTMLElement {
 	 * vertices, and releasing Alt while dragging goes freehand again.
 	 * A polygonal lasso draws straight segments to the pointer, and freehand
 	 * while dragged with Alt held. Shift snaps a straight segment to 45°.
+	 * A shape is dragged from the press to the pointer, as is the selection
+	 * moved.
 	 */
 	#track(client: Point, keys: Keys): void {
 		this.#client = client;
@@ -716,6 +786,7 @@ export class LassoOverlay extends HTMLElement {
 		if (!this.#target || !draft) return;
 
 		const point = this.#point_at(client);
+		const shape = is_shape(this.#mode);
 		this.#pointer = point;
 		let dragged_now = false;
 
@@ -724,18 +795,28 @@ export class LassoOverlay extends HTMLElement {
 			if (Math.hypot(client[0] - x, client[1] - y) > MOVE_THRESHOLD) {
 				this.#gesture = "drag";
 				dragged_now = true;
-				if (!this.#drawing) this.#begin(true);
+				if (!this.#drawing && !this.#moving) this.#begin(true);
 			}
 		}
 
-		if (this.#gesture === "drag") {
-			// Before any segment was done, leaving the area drags the image.
-			if (this.#fresh && this.#left_area(client)) {
-				this.#to_drop();
-				this.#drag_over(client);
-				return;
+		if (this.#moving) {
+			if (this.#gesture === "drag") {
+				const [x0, y0] = this.#press_point!;
+				this.#selection = translate(this.#original!, [point[0] - x0, point[1] - y0]);
+				this.#render();
 			}
+			this.#update_cursor();
+			return;
+		}
 
+		// Before any segment was done, leaving the area drags the image.
+		if (this.#gesture === "drag" && this.#fresh && this.#left_area(client)) {
+			this.#to_drop();
+			this.#drag_over(client);
+			return;
+		}
+
+		if (this.#gesture === "drag" && !shape) {
 			const freehand =
 				this.#mode === "freehand" ? this.#freehand || !keys.altKey : keys.altKey;
 
@@ -746,7 +827,9 @@ export class LassoOverlay extends HTMLElement {
 			}
 		}
 
-		if (this.#freehand) {
+		if (shape) {
+			if (this.#drawing) this.#draft = this.#shape(point, keys);
+		} else if (this.#freehand) {
 			const [last_x, last_y] = draft[draft.length - 1];
 			if (Math.hypot(point[0] - last_x, point[1] - last_y) >= MIN_SPACING) {
 				draft.push(point);
@@ -763,10 +846,41 @@ export class LassoOverlay extends HTMLElement {
 	}
 
 	/**
+	 * Rectangle or ellipse from the press to `point`, clamped to image, or no
+	 * vertex if it encloses nothing. Shift makes it a square or a circle, and
+	 * Alt draws it from its center, unless they set the operation at the
+	 * press: then, once released and pressed again.
+	 */
+	#shape(point: Point, keys: Keys): Point[] {
+		this.#latched.shift &&= keys.shiftKey;
+		this.#latched.alt &&= keys.altKey;
+
+		const [x0, y0] = this.#press_point!;
+		let [dx, dy] = [point[0] - x0, point[1] - y0];
+
+		if (keys.shiftKey && !this.#latched.shift) {
+			const side = Math.max(Math.abs(dx), Math.abs(dy));
+			dx = dx < 0 ? -side : side;
+			dy = dy < 0 ? -side : side;
+		}
+
+		if (Math.abs(dx) < MIN_SPACING || Math.abs(dy) < MIN_SPACING) return [];
+
+		const from: Point = keys.altKey && !this.#latched.alt ? [x0 - dx, y0 - dy] : [x0, y0];
+		const box: Box = [from, [x0 + dx, y0 + dy]];
+		const { width, height } = natural_size(this.#target)!;
+
+		return (this.#mode === "rectangle" ? rectangle(box) : ellipse(box)).map(
+			([x, y]): Point => [clamp(x, 0, width), clamp(y, 0, height)]
+		);
+	}
+
+	/**
 	 * Release ends a click, which ends a straight segment, or a drag, which
-	 * ends a freehand one. A click on the first vertex closes the outline, as
-	 * do a double-click, a click with Ctrl (Cmd on macOS) held, which adds a
-	 * vertex first, and releasing a freehand lasso without Alt held.
+	 * ends a freehand one, closes a shape or moves the selection. A click on
+	 * the first vertex closes the outline, as do a double-click, a click with
+	 * Ctrl (Cmd on macOS) held, which adds a vertex first, and releasing a
+	 * freehand lasso without Alt held.
 	 */
 	#on_pointerup(event: PointerEvent): void {
 		const gesture = this.#gesture;
@@ -785,9 +899,16 @@ export class LassoOverlay extends HTMLElement {
 			return;
 		}
 
+		if (this.#moving && gesture === "drag") {
+			this.#reset();
+			this.#render();
+			this.#emit();
+			return;
+		}
+
 		if (!this.#drawing) {
-			// A mere click starts a polygonal lasso, and clears a freehand one,
-			// unless a shortcut is held.
+			// A mere click starts a polygonal lasso, and clears the selection
+			// otherwise, unless a shortcut is held.
 			if (this.#mode === "polygonal") {
 				this.#begin(false);
 				this.#last_click = { time: event.timeStamp, at: this.#press! };
@@ -802,6 +923,12 @@ export class LassoOverlay extends HTMLElement {
 		}
 
 		const client: Point = [event.clientX, event.clientY];
+
+		if (is_shape(this.#mode)) {
+			this.#track(client, event);
+			this.#commit();
+			return;
+		}
 
 		if (this.#freehand) {
 			if (this.#mode === "freehand" && !event.altKey) {
@@ -847,11 +974,12 @@ export class LassoOverlay extends HTMLElement {
 		);
 	}
 
-	/** Whether pointer is on the first vertex of an outline it can close. */
+	/** Whether pointer is on the first vertex of a lasso outline it can close. */
 	#near_start(): boolean {
 		const draft = this.#draft;
 		return (
 			this.#drawing &&
+			!is_shape(this.#mode) &&
 			!this.#freehand &&
 			!!draft &&
 			!!this.#pointer &&
@@ -860,11 +988,11 @@ export class LassoOverlay extends HTMLElement {
 		);
 	}
 
-	/** Start drawing an outline, which replaces the current lasso at once if no shortcut was held. */
+	/** Start drawing an outline, which replaces the current selection at once if no shortcut was held. */
 	#begin(dragged: boolean): void {
 		this.#drawing = true;
 		this.#fresh = dragged;
-		if (!this.#operation) this.#lasso = null;
+		if (!this.#operation) this.#selection = null;
 
 		if (this.#mode === "freehand") {
 			this.#run_start = 0;
@@ -899,9 +1027,9 @@ export class LassoOverlay extends HTMLElement {
 		this.#marks.push(draft.length);
 	}
 
-	/** Remove the last segment, or cancel the outline if none is left. */
+	/** Remove the last segment of a lasso, or cancel it if none is left. */
 	#undo_segment(): boolean {
-		if (!this.#drawing || this.#freehand) return false;
+		if (!this.#drawing || this.#freehand || is_shape(this.#mode)) return false;
 
 		this.#marks.pop();
 		const end = this.#marks.at(-1);
@@ -928,23 +1056,23 @@ export class LassoOverlay extends HTMLElement {
 
 		const draft = this.#draft;
 		const operation = this.#operation;
-		const lasso = this.#lasso;
+		const selection = this.#selection;
 		const original = this.#original;
 		this.#reset();
 
 		if (!operation) {
 			if (!draft || draft.length < MIN_POINTS) {
 				// Cleared as drawing started, yet reselectable.
-				this.#lasso = original;
+				this.#selection = original;
 				this.clear();
 				return;
 			}
 
-			this.#lasso = [draft];
+			this.#selection = [draft];
 		} else if (draft && draft.length >= MIN_POINTS) {
-			// Adding to no lasso draws one, subtracting from or intersecting it does nothing.
-			if (!lasso) this.#lasso = operation === "add" ? [draft] : null;
-			else this.#lasso = combine(lasso, draft, operation) ?? lasso;
+			// Adding to no selection makes one, subtracting from or intersecting it does nothing.
+			if (!selection) this.#selection = operation === "add" ? [draft] : null;
+			else this.#selection = combine(selection, draft, operation) ?? selection;
 		}
 
 		this.#render();
@@ -955,9 +1083,9 @@ export class LassoOverlay extends HTMLElement {
 		return Math.max(0, Math.floor(this.smoothing)) || 0;
 	}
 
-	/** Back to lasso as it was before user started drawing. */
+	/** Back to selection as it was before user started drawing or moving it. */
 	#cancel(): void {
-		if (this.#busy && this.#gesture !== "drop") this.#lasso = this.#original;
+		if (this.#busy && this.#gesture !== "drop") this.#selection = this.#original;
 		this.#reset();
 		this.#render();
 	}
@@ -965,7 +1093,7 @@ export class LassoOverlay extends HTMLElement {
 	/** Turn the drawing into a drag of the image. */
 	#to_drop(): void {
 		this.#gesture = "drop";
-		this.#lasso = this.#original;
+		this.#selection = this.#original;
 		this.#drawing = false;
 		this.#freehand = false;
 		this.#draft = null;
@@ -982,6 +1110,8 @@ export class LassoOverlay extends HTMLElement {
 		this.#drawing = false;
 		this.#fresh = false;
 		this.#operation = null;
+		this.#moving = false;
+		this.#latched = { shift: false, alt: false };
 		this.#press = null;
 		this.#press_point = null;
 		this.#original = null;
@@ -1015,10 +1145,12 @@ export class LassoOverlay extends HTMLElement {
 
 		if (this.#gesture === "drop") {
 			cursor = this.#droppable ? "copy" : "grabbing";
+		} else if (this.#moving || (this.#over && !this.#busy && !this.#held && !this.#disabled)) {
+			cursor = icon_cursor("move", null);
 		} else if (!this.#disabled) {
 			// Shortcut held as user started holds until the outline closes.
 			const operation = this.#busy ? this.#operation : this.#held;
-			cursor = lasso_cursor(this.#mode, this.#near_start() ? "close" : operation);
+			cursor = icon_cursor(this.#mode, this.#near_start() ? "close" : operation);
 		}
 
 		this.style.cursor = cursor;
@@ -1027,7 +1159,7 @@ export class LassoOverlay extends HTMLElement {
 		if (bands) bands.style.cursor = this.#drawing ? cursor : "";
 	}
 
-	/** Whether pointer left the area lasso is drawn within. */
+	/** Whether pointer left the area selection is drawn within. */
 	#left_area([x, y]: Point): boolean {
 		const rect = (this.area ?? this).getBoundingClientRect();
 		return x < rect.left || x > rect.right || y < rect.top || y > rect.bottom;
@@ -1036,7 +1168,7 @@ export class LassoOverlay extends HTMLElement {
 	/**
 	 * Drag displayed image over the element pointer is over, outside overlay,
 	 * as browser would do. Overlay can't let browser drag the image itself:
-	 * it would take any drag over it, those drawing the lasso included.
+	 * it would take any drag over it, those drawing the selection included.
 	 */
 	#drag_over([x, y]: Point): void {
 		const hit = document.elementFromPoint(x, y);
@@ -1087,8 +1219,8 @@ function natural_size(image: HTMLImageElement | null): Size | null {
 		: null;
 }
 
-export const OVERLAY_TAG = "lasso-tool-overlay";
+export const OVERLAY_TAG = "select-tool-overlay";
 
 if (!customElements.get(OVERLAY_TAG)) {
-	customElements.define(OVERLAY_TAG, LassoOverlay);
+	customElements.define(OVERLAY_TAG, SelectionOverlay);
 }
