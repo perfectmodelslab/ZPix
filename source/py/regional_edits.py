@@ -39,9 +39,13 @@ LATENT_CELL = 16
 """Pixels per latent cell, at most: the region regenerated is the cells the
 lasso covers, so it can spill that far out of the lasso."""
 
-INPAINT_MAX_PIXELS: dict[str, int] = {"FLUX.2": 1024 * 1024}
-"""Pixels the inpaint pipeline of a family scales the source image down to, at
-most, whatever size it is asked for."""
+INPAINT_MAX_PIXELS: dict[str, int] = {
+    "FLUX.2": 1024 * 1024,
+    "Qwen-Image 2.1": 1024 * 1024,
+}
+"""Pixels a family inpaints at, at most, whatever size the source image is: the
+FLUX.2 [klein] pipeline scales it down to them, and Qwen-Image 2.1 reads its
+condition image at about as many."""
 
 FEATHER_RADIUS = 4
 """Blur of the edge the source image is pasted back along, so no seam shows."""
@@ -158,7 +162,7 @@ def get_inpaint_size(inpaint_source: Image.Image, family: str) -> tuple[int, int
     source image: the one to fit memory to, rather than the source image's.
 
     Floored to whole latent cells, as pipelines refuse or floor other sizes, and
-    scaled down to what the pipeline caps it at, if it does.
+    scaled down to what the family is capped at, if it is.
     """
     width, height = inpaint_source.size
     max_pixels = INPAINT_MAX_PIXELS.get(family)
