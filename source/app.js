@@ -38,6 +38,14 @@ for (const type of ["keydown", "keyup"]) {
     })
 }
 
+// Pointer events can't reach the app blurred behind the terms of use,
+// but Tab could: send focus back to their accept button.
+document.addEventListener("focusin", (event) => {
+    if (event.target.closest?.(".blurred")) {
+        document.querySelector("#tou-card button")?.focus()
+    }
+})
+
 // A refresh can close the server (see app.unload)
 // or disturb the app state.
 if (performance.getEntriesByType("navigation")[0]?.type === "reload") {

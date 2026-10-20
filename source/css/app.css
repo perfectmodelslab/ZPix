@@ -49,10 +49,13 @@ textarea:focus-visible {
 }
 
 #tou-card {
-    max-width: 360px;
+    max-width: 500px;
     padding: 1rem;
     background: var(--block-background-fill);
     border-radius: 5px;
+}
+
+#tou-card h3 {
     text-align: center;
 }
 
