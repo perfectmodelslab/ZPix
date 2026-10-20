@@ -980,9 +980,14 @@
 		height: 18px;
 	}
 
-	/* Active tool, as hovered. */
+	/* Active tool, unlike hovered: accent toned down by the panel. */
 	.toolbar :global(.icon-button[aria-pressed="true"]) {
-		background-color: var(--background-fill-secondary);
+		background-color: color-mix(in srgb, var(--color-accent) 90%, var(--block-background-fill));
+	}
+
+	/* On the icon wrapper, as IconButton sets its own color inline. */
+	.toolbar :global(.icon-button[aria-pressed="true"] > div) {
+		color: white;
 	}
 
 	.toolbar:empty {
