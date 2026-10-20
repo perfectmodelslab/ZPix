@@ -27,6 +27,17 @@ document.addEventListener("drop", () => {
     window.chrome?.webview?.postMessage("getWindowFocus")
 }, true)
 
+// Space would press a focused button or scroll the page: keep it for
+// the prompt. Canvas still gets it to pan (see its window listener).
+// Keyup too, since some browsers press a button on it.
+for (const type of ["keydown", "keyup"]) {
+    document.addEventListener(type, (event) => {
+        if (event.code === "Space" && !event.target.matches?.("#prompt textarea")) {
+            event.preventDefault()
+        }
+    })
+}
+
 // A refresh can close the server (see app.unload)
 // or disturb the app state.
 if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
