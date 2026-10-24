@@ -1,5 +1,13 @@
 # ZPix FAQ
 
+## Inpainting doesn't work well or at all...
+
+Things you can do:
+
+- Use a `FLUX.2 [klein]` or `Qwen-Image 2.1` model, as they usually inpaint better.
+- Slightly adjust the selection; for example, enlarge it to include more context.
+- Generate an image with a different seed.
+
 ## Is it possible to generate images with a custom style or a specific character?
 
 Yes, using LoRA models:
@@ -17,6 +25,10 @@ Things you can do:
 
 - Return to LoRA source page, authors often give usage tips (e.g. a lower LoRA strength, a trigger word) and prompts examples.
 - Generate an image with a different seed.
+
+## Where do discarded images go?
+
+If they were generated during the current session, to the *Discarded* subfolder in the output folder.
 
 ## How to update to the latest version?
 
@@ -42,7 +54,7 @@ Once model is downloaded, yes.
 
 ### Windows
 1. Close application.
-2. Create a file named `DEBUG` next to `ZPix.exe`.
+2. Create a file named *DEBUG* next to *ZPix.exe*.
 3. Restart application; notice that a console stays open in background.
 4. Repeat actions that previously triggered this error.
 5. Look at console output.
