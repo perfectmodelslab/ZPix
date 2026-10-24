@@ -1,24 +1,25 @@
 # ZPix
 
-<img src="https://raw.githubusercontent.com/SamuelTallet/ZPix/refs/heads/main/docs/screens/ZPix-v1.0.7.webp">
+<img src="https://raw.githubusercontent.com/SamuelTallet/ZPix/refs/heads/main/docs/screens/ZPix-v1.1.1.apng">
 
 Generate and edit images easily, for free, using solely the power of your GPU. 
-Hotswap LoRAs. Drag reference images directly from output gallery, which is always visible. Everything is made for your comfort. See [all features](#features).
+Drop an image, select an area with familiar tools like the lasso, inpaint it.
+ZPix aims to be simple yet powerful. See [all features](#features).
 
 ## Quick start
 
 Windows:
-1. Download and extract [ZPix_1.1.0_Windows.zip](https://github.com/SamuelTallet/ZPix/releases/download/v1.1.0/ZPix_1.1.0_Windows.zip)
+1. Download and extract [ZPix_1.1.1_Windows.zip](https://github.com/SamuelTallet/ZPix/releases/download/v1.1.1/ZPix_1.1.1_Windows.zip)
 2. Run `ZPix.exe`
     - If SmartScreen pops, click on "More info", "Run anyway"
     - If a DLL is missing, install [Visual C++ Redist](https://aka.ms/vc14/vc_redist.x64.exe) and re-run
 
 Debian/Ubuntu:
-1. Download and install [zpix_1.1.0-1_all.deb](https://github.com/SamuelTallet/ZPix/releases/download/v1.1.0/zpix_1.1.0-1_all.deb)
+1. Download and install [zpix_1.1.1-1_all.deb](https://github.com/SamuelTallet/ZPix/releases/download/v1.1.1/zpix_1.1.1-1_all.deb)
 2. Run ZPix from app launcher
 
 macOS:
-1. Download and open [ZPix_1.1.0_AppleSilicon.dmg](https://github.com/SamuelTallet/ZPix/releases/download/v1.1.0/ZPix_1.1.0_AppleSilicon.dmg)
+1. Download and open [ZPix_1.1.1_AppleSilicon.dmg](https://github.com/SamuelTallet/ZPix/releases/download/v1.1.1/ZPix_1.1.1_AppleSilicon.dmg)
 2. Drag ZPix to Applications
 3. Run ZPix from Applications
     - If the app doesn't launch, go to system "Settings" > "Privacy & Security", click on "Open Anyway"
@@ -63,30 +64,43 @@ Initial model at start, then other models when requested.
 
 ### Text-to-Image
 
-Create image from prompt.
+Create an image from a prompt.
 
 ### Image-to-Image
 
-- Create or edit image based on prompt and/or reference images.
-- Add or drag reference images from output gallery or anywhere.
+- Create or edit an image based on a prompt and/or reference images.
+- Add or drag references from the in-app gallery or anywhere.
 
-### Prompts history
+### Inpainting
 
-- Extract prompt from image (metadata), dragged from output gallery or anywhere.
-- Reuse or copy prompt of displayed image with dedicated buttons.
+- Drop an image, select an area with tools, then prompt for precise changes.<br>
+Tools available: Lasso, Polygonal Lasso, Rectangle, Ellipse.
+- Enhance patch quality with the bundled hi-res fix (1.5x, 2x).
+- Pixels outside your selection stay untouched.
+
+### Prompt history
+
+- Drop an image made by ZPix in the prompt textarea to retrieve its prompt.<br>
+You can also drag the image from the in-app gallery.
+- Reuse or copy the prompt of the displayed image with dedicated buttons.
 
 ### Custom styles
 
-- Load LoRA safetensors on-the-fly; change LoRA strength.
-- LoRA trigger words are auto-inserted, if found in LoRA metadata.
+- Load a LoRA safetensors file on the fly and adjust its strength.
+- LoRA trigger words are auto-inserted if found in LoRA metadata.
 
 ### Fourteen ratios
 
 1:1, 16:9, 9:16, 4:3, 3:4, 5:4, 4:5, 3:2, 2:3, 16:10, 10:16, 21:9, 9:20, 2:1
 
-### Seed control
+### Keyboard shortcuts
 
-Specify a seed value for image reproducibility or leave it random.
+Photoshop-like shortcuts for inpainting selection tools, fullscreen, and more.
+
+### Advanced settings
+
+- Adjust steps, and CFG on base models.
+- Specify a seed or leave it random.
 
 ## Gallery
 
